@@ -100,6 +100,33 @@ def ensure_limit(sql: str, limit: int) -> str:
     return clean_sql
 
 
+def make_dataframe_hashable(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure all columns contain hashable types by serializing dicts/lists to JSON strings."""
+    df = df.copy()
+    for col in df.columns:
+        if df[col].dtype == "object":
+            df[col] = df[col].map(
+                lambda v: json.dumps(v, sort_keys=True) if isinstance(v, (dict, list, set)) else v
+            )
+    return df
+
+
+def safe_drop_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """Safely drop duplicate rows, handling unhashable types like dicts or lists."""
+    initial_len = len(df)
+    clean_df = make_dataframe_hashable(df)
+    try:
+        deduped = clean_df.drop_duplicates()
+    except TypeError:
+        fallback_df = clean_df.copy()
+        for col in fallback_df.columns:
+            if fallback_df[col].dtype == "object":
+                fallback_df[col] = fallback_df[col].astype(str)
+        deduped = fallback_df.drop_duplicates()
+    dropped = initial_len - len(deduped)
+    return deduped, dropped
+
+
 # --- UI Header ---
 st.title("⚡ CDP On-Chain SQL Extractor")
 st.caption("Query indexed Base blockchain data via Coinbase Developer Platform & export directly to CSV.")
@@ -118,8 +145,8 @@ with st.sidebar:
     csv_files = list(DATA_DIR.glob("*.csv"))
     if csv_files:
         for f in sorted(csv_files, key=lambda x: x.stat().st_mtime, reverse=True):
-            size_kb = f.stat().st_size / 1024
-            st.markdown(f"- **`{f.name}`** ({size_kb:.1f} KB)")
+            size_mb = f.stat().st_size / (1024 * 1024)
+            st.markdown(f"- **`{f.name}`** ({size_mb:.1f} MB)")
     else:
         st.info("No CSV files saved yet.")
 
@@ -135,6 +162,13 @@ with col_file:
     if not file_name.endswith(".csv"):
         file_name = f"{file_name}.csv"
 
+    target_path = DATA_DIR / file_name
+    if target_path.exists():
+        size_mb = target_path.stat().st_size / (1024 * 1024)
+        st.caption(f"📁 Target exists ({size_mb:.2f} MB)")
+    else:
+        st.caption("✨ Target will be created as a new file.")
+
 with col_limit:
     limit_value = st.number_input(
         "🔢 Row Limit (Max: 50,000)",
@@ -143,6 +177,34 @@ with col_limit:
         value=50000,
         step=1000,
         help="CDP enforces a hard limit of 50,000 rows per query.",
+    )
+
+col_mode, col_dedup, col_sort = st.columns([2, 1.2, 1.2])
+
+with col_mode:
+    save_mode = st.radio(
+        "💾 Save Action",
+        options=["Append to previous data", "Replace / Overwrite"],
+        index=0,
+        horizontal=True,
+        help=(
+            "Append: Merges new query results with previously saved data so you can run queries by range.\n"
+            "Replace: Completely overwrites the existing file."
+        ),
+    )
+
+with col_dedup:
+    deduplicate = st.checkbox(
+        "Deduplicate rows",
+        value=True,
+        help="Removes duplicate rows when appending so overlapping ranges don't duplicate records.",
+    )
+
+with col_sort:
+    sort_timestamp = st.checkbox(
+        "Sort by timestamp",
+        value=True,
+        help="Sort results descending by block_timestamp if the column exists.",
     )
 
 sql_query = st.text_area(
@@ -193,37 +255,101 @@ if st.button("🚀 Run Query & Export Data", type="primary", use_container_width
                     else:
                         st.write("3️⃣ Parsing and saving results...")
                         df = pd.DataFrame(rows)
+                        df = make_dataframe_hashable(df)
+                        new_row_count = len(df)
 
                         output_path = DATA_DIR / file_name
                         output_path.parent.mkdir(parents=True, exist_ok=True)
-                        df.to_csv(output_path, index=False)
 
+                        is_append = save_mode.startswith("Append") and output_path.exists()
+                        prev_row_count = 0
+                        duplicates_dropped = 0
+
+                        if is_append:
+                            try:
+                                existing_df = pd.read_csv(output_path, low_memory=False)
+                                prev_row_count = len(existing_df)
+                                final_df = pd.concat([existing_df, df], ignore_index=True)
+                            except Exception as read_err:
+                                st.warning(f"Could not read existing CSV ({read_err}); starting fresh.")
+                                final_df = df
+                        else:
+                            final_df = df
+
+                        if deduplicate:
+                            final_df, duplicates_dropped = safe_drop_duplicates(final_df)
+
+                        if sort_timestamp and "block_timestamp" in final_df.columns:
+                            final_df = final_df.sort_values(by="block_timestamp", ascending=False)
+
+                        final_df.to_csv(output_path, index=False)
+                        total_rows = len(final_df)
+
+                        status_label = (
+                            f"Appended {new_row_count:,} rows (Total: {total_rows:,}) in {elapsed:.2f}s"
+                            if is_append
+                            else f"Saved {total_rows:,} rows in {elapsed:.2f}s"
+                        )
                         status.update(
-                            label=f"Done! {len(df):,} rows retrieved in {elapsed:.2f}s",
+                            label=status_label,
                             state="complete",
                             expanded=False,
                         )
 
-                        st.success(f"Successfully saved **{len(df):,} rows** to `{output_path}`")
+                        if is_append:
+                            st.success(
+                                f"Successfully appended **{new_row_count:,} new rows** to `{output_path}`. "
+                                f"File now contains **{total_rows:,} total rows**."
+                            )
+                        else:
+                            st.success(f"Successfully saved **{total_rows:,} rows** to `{output_path}`")
 
                         # Display metrics
-                        m1, m2, m3 = st.columns(3)
-                        m1.metric("Rows Returned", f"{len(df):,}")
-                        m2.metric("Execution Time", f"{elapsed:.2f}s")
-                        m3.metric("Cached", str(metadata.get("cached", False)))
+                        if is_append:
+                            m1, m2, m3, m4 = st.columns(4)
+                            m1.metric("New Rows Fetched", f"+{new_row_count:,}")
+                            m1.metric("Previous Rows", f"{prev_row_count:,}")
+                            m1.metric("Duplicates Dropped", f"{duplicates_dropped:,}")
+                            m1.metric("Total Rows in File", f"{total_rows:,}")
+                        else:
+                            m1, m2, m3 = st.columns(3)
+                            m1.metric("Rows Returned", f"{total_rows:,}")
+                            m2.metric("Execution Time", f"{elapsed:.2f}s")
+                            m3.metric("Cached", str(metadata.get("cached", False)))
 
-                        # Download button
-                        csv_data = df.to_csv(index=False).encode("utf-8")
-                        st.download_button(
-                            label="⬇️ Download CSV File",
-                            data=csv_data,
-                            file_name=file_name,
-                            mime="text/csv",
-                        )
+                        # Download buttons
+                        csv_data = final_df.to_csv(index=False).encode("utf-8")
+                        if is_append:
+                            col_dl1, col_dl2 = st.columns(2)
+                            with col_dl1:
+                                st.download_button(
+                                    label=f"⬇️ Download Full Dataset ({total_rows:,} rows)",
+                                    data=csv_data,
+                                    file_name=file_name,
+                                    mime="text/csv",
+                                    use_container_width=True,
+                                )
+                            with col_dl2:
+                                batch_csv = df.to_csv(index=False).encode("utf-8")
+                                st.download_button(
+                                    label=f"⬇️ Download Current Batch ({new_row_count:,} rows)",
+                                    data=batch_csv,
+                                    file_name=f"batch_{file_name}",
+                                    mime="text/csv",
+                                    use_container_width=True,
+                                )
+                        else:
+                            st.download_button(
+                                label=f"⬇️ Download CSV File ({total_rows:,} rows)",
+                                data=csv_data,
+                                file_name=file_name,
+                                mime="text/csv",
+                                use_container_width=True,
+                            )
 
                         # Preview Data
-                        st.subheader("📊 Data Preview (Top 100 rows)")
-                        st.dataframe(df.head(100), use_container_width=True)
+                        st.subheader(f"📊 Data Preview (Top 100 of {total_rows:,} rows)")
+                        st.dataframe(final_df.head(100), use_container_width=True)
 
             except Exception as e:
                 status.update(label="Error occurred", state="error")
