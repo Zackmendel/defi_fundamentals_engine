@@ -13,3 +13,7 @@ data/
 .env
 *.env
 *cdp_api_key.json
+
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp

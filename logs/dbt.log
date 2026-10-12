@@ -1,0 +1,41 @@
+==================== 2026-10-12T14:03:24.934647Z | 01a1306c-e35f-7861-8af1-b112b8a09362 ====================
+14:03:24.941971 [info ]: Installing dbt project and profile setup
+14:03:24.956698 [info ]: Info Created .vscode/extensions.json with dbt extension recommendation
+14:03:24.960675 [info ]: Success Project created successfully!
+14:03:24.960971 [info ]: Info Project name: jaffle_shop
+14:03:24.961068 [info ]: Info Project directory: jaffle_shop
+14:03:50.499083 [info ]: Info Using existing profile 'zackmart'
+14:03:50.499530 [info ]: Success Set profile 'zackmart' in dbt_project.yml
+14:03:50.499810 [info ]: Validating profile inputs, adapters, and connection
+
+14:03:50.500404 [info ]: dbt-fusion 2.0.0-preview.218
+14:03:50.507951 [info ]: Started loading project
+14:03:50.556777 [info ]: Loading ~/.dbt/profiles.yml
+14:03:50.587190 [info ]: Finished loading project [  0.08s]
+14:03:50.592034 [info ]: Started debugging
+14:03:50.593185 [info ]: Debugging profile: motherduck
+14:03:50.593310 [info ]: Debugging dbt version: 2.0.0-preview.218
+14:03:50.593373 [info ]: Debugging platform: linux x86_64 (unix)
+14:03:50.595604 [info ]: Debugging adapter type: duckdb (remote)
+14:03:50.598981 [info ]: Debugging dependencies:
+  git: OK
+14:03:50.605584 [info ]: Debugging connection:
+  "path": "md:zackmart"
+14:03:50.625856 [debug]: DuckDB driver resolved: duckdb 1.5.4
+14:03:54.895068 [debug]: borrow_tlocal_connection() took 4.276185119s
+14:03:54.908716 [debug]: create_debug_span(...).entered() took 2.655714ms
+14:03:54.916191 [debug]: stmt.execute() (submit+wait_for_completion, returns reader) took 2.924848ms
+14:03:54.916255 [debug]: reader.schema() took 787ns
+14:03:54.917570 [debug]: do_execute(conn) (closure: stmt.execute + schema + batch loop) took 8.769721ms
+14:03:54.922369 [debug]: concat_batches + normalize_result_column_names took 4.708116ms
+14:03:54.923135 [debug]: record_current_span_status_from_attrs took 703.683µs
+14:03:54.923820 [debug]: Query executed on node unknown:
+select 1 as id
+14:03:54.924554 [debug]: drop(query_span_guard) (span exit/export) took 1.365348ms
+14:03:54.933478 [debug]: adapter.execute() (full call, incl. adbc_execute_with_options) took 38.321871ms
+14:03:54.937431 [info ]: Debugging connection test: OK (4.3s)
+14:03:55.174717 [info ]: Debugged All checks passed!
+14:03:55.174902 [info ]: Finished debugging [  4.58s]
+14:03:57.045549 [info ]: 
+==================== Execution Summary =====================
+Finished 'init' successfully for target 'motherduck' [32.1s]

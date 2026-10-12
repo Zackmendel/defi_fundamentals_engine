@@ -1,6 +1,7 @@
-import pandas as pd 
+import pandas as pd
 
+# df = pd.read_csv("data/uniswap_v2_swaps.csv", on_bad_lines="skip")
 
-df = pd.read_csv('data/uniswap_v4_pool_metadata.csv')
+df = pd.read_csv("data/uniswap_v2_swaps.csv")
 
-df['block_number'].unique().tail(1)
+# df.to_csv("data/uniswap_v2_swaps.csv")

@@ -1,0 +1,24 @@
+name: defi_fundamentals_engine
+
+profile: defi_fundamentals_engine
+
+seed-paths: ["seeds"]
+model-paths: ["models"]
+macro-paths: ["macros"]
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+seeds:
+  # Builds seeds into '<your_schema_name>_raw'
+  defi_fundamentals_engine:
+    +schema: raw
+
+models:
+  defi_fundamentals_engine:
+    +static_analysis: strict
+    # Materialize staging models as views, and marts as tables
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
