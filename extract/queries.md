@@ -84,6 +84,33 @@ ORDER BY block_timestamp DESC
 ;
 ```
 
+## Pool Metadata queries
+I used block_time order to get a more richer token metadata since block 9000000 due to rate limits on the base SQL API
+
+### Uniswap v3 Pool Metadata
+```
+SELECT
+    block_number,
+    block_timestamp,
+    transaction_hash,
+    transaction_to,
+    transaction_from,
+    address,
+    event_name,
+    event_signature,
+    parameters['pair'] AS pool_address,
+    parameters['token0'] AS token0_address,
+    parameters['token1'] AS token1_address,
+    parameter_types
+FROM base.events
+WHERE address = '0x8909dc15e40173ff4699343b6eb8132c65e18ec6'
+  AND event_signature = 'PairCreated(address,address,address,uint256)'
+  AND action = 1
+  AND block_number >= 52505226  -- Roughly the start of 2024 on Base
+ORDER BY block_number ASC
+LIMIT 50000;
+```
+
 ### AAVE v3 SUPPLIES
 ```
 SELECT

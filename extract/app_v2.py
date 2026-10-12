@@ -111,56 +111,45 @@ def get_csv_columns(path: Path) -> list[str]:
         return []
 
 
-def get_last_csv_row_value(path: Path, col_name: str):
+@st.cache_data
+def get_last_csv_row_value(path_str: str, col_name: str, mtime: float):
     """
-    Instantly retrieve the last row value of a column by seeking to the end of the file.
-    Executes in under 1ms even for gigabyte-sized files.
+    Retrieve the last row value of a column accurately using pandas.
+    Cached by file mtime for sub-millisecond Streamlit reruns while handling
+    multiline CSV values, quoted strings, and arbitrary data types cleanly.
     """
+    path = Path(path_str)
     if not path.exists():
         return None
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            header_line = f.readline().strip()
-        cols = [c.strip() for c in next(csv.reader([header_line]))]
-        if col_name not in cols:
+        df_col = pd.read_csv(path, usecols=[col_name], low_memory=False)
+        if df_col.empty:
             return None
-        col_idx = cols.index(col_name)
-
-        with open(path, "rb") as f:
-            f.seek(0, 2)
-            file_size = f.tell()
-            if file_size == 0:
-                return None
-            buffer_size = min(file_size, 8192)
-            f.seek(file_size - buffer_size)
-            chunk = f.read().decode("utf-8", errors="replace")
-            lines = chunk.strip().split("\n")
-            if not lines:
-                return None
-            last_line = lines[-1].strip()
-            row = next(csv.reader([last_line]))
-            if len(row) > col_idx:
-                raw_val = row[col_idx].strip()
-                try:
-                    num = float(raw_val)
-                    return int(num) if num.is_integer() else num
-                except ValueError:
-                    return raw_val
+        series = df_col[col_name].dropna()
+        if series.empty:
+            return None
+        last_val = series.iloc[-1]
+        try:
+            num = float(last_val)
+            return int(num) if num.is_integer() else num
+        except (ValueError, TypeError):
+            return str(last_val)
     except Exception:
         return None
 
 
-def update_query_cursor(sql: str, col_name: str, new_val) -> str:
-    """Update or inject the >= cursor condition for the selected column into the SQL query."""
+def update_query_cursor(sql: str, col_name: str, new_val, direction: str = "ASC") -> str:
+    """Update or inject the cursor condition (>= or <=) for the selected column into the SQL query."""
     val_str = str(new_val) if isinstance(new_val, (int, float)) else f"'{new_val}'"
-    pattern = rf"(\b{re.escape(col_name)}\s*>=?\s*)(\d+|\'[^\']*\')"
+    op = "<=" if direction.upper() == "DESC" else ">="
+    pattern = rf"(\b{re.escape(col_name)}\s*)(>=?|<=?)(\s*)(\d+|\'[^\']*\')"
     if re.search(pattern, sql, re.IGNORECASE):
-        return re.sub(pattern, rf"\g<1>{val_str}", sql, flags=re.IGNORECASE)
+        return re.sub(pattern, rf"\g<1>{op}\g<3>{val_str}", sql, flags=re.IGNORECASE)
     else:
         if re.search(r"\bWHERE\b", sql, re.IGNORECASE):
             return re.sub(
                 r"(\bWHERE\b\s+)",
-                rf"\g<1>{col_name} >= {val_str}\n  AND ",
+                rf"\g<1>{col_name} {op} {val_str}\n  AND ",
                 sql,
                 flags=re.IGNORECASE,
                 count=1,
@@ -169,19 +158,50 @@ def update_query_cursor(sql: str, col_name: str, new_val) -> str:
             order_match = re.search(r"(\bORDER\s+BY\b|\bLIMIT\b)", sql, re.IGNORECASE)
             if order_match:
                 idx = order_match.start()
-                return f"{sql[:idx]}WHERE {col_name} >= {val_str}\n{sql[idx:]}"
-            return f"{sql}\nWHERE {col_name} >= {val_str}"
+                return f"{sql[:idx]}WHERE {col_name} {op} {val_str}\n{sql[idx:]}"
+            return f"{sql}\nWHERE {col_name} {op} {val_str}"
 
 
 def make_dataframe_hashable(df: pd.DataFrame) -> pd.DataFrame:
-    """Ensure all columns contain hashable types by serializing dicts/lists to JSON strings."""
+    """Ensure all columns contain hashable types by serializing dicts/lists to JSON strings
+    and casting oversized integers (>64-bit C long limit) to strings."""
     df = df.copy()
     for col in df.columns:
         if df[col].dtype == "object":
             df[col] = df[col].map(
-                lambda v: json.dumps(v, sort_keys=True) if isinstance(v, (dict, list, set)) else v
+                lambda v: json.dumps(v, sort_keys=True) if isinstance(v, (dict, list, set))
+                else (str(v) if isinstance(v, int) and (v > 2**63 - 1 or v < -(2**63)) else v)
             )
+        elif pd.api.types.is_integer_dtype(df[col]):
+            if (df[col] > 2**63 - 1).any() or (df[col] < -(2**63)).any():
+                df[col] = df[col].astype(str)
     return df
+
+
+def sanitize_for_display(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ensure DataFrame can be safely converted to PyArrow for Streamlit display.
+    Converts large blockchain integers (> 64-bit int limits) and unhashable objects
+    to strings to prevent PyArrow OverflowError.
+    """
+    df_clean = df.copy()
+    for col in df_clean.columns:
+        if df_clean[col].dtype == "object":
+            has_large_ints = df_clean[col].map(
+                lambda x: isinstance(x, int) and (x > 2**63 - 1 or x < -(2**63))
+            ).any()
+            if has_large_ints:
+                df_clean[col] = df_clean[col].astype(str)
+            else:
+                try:
+                    import pyarrow as pa
+                    pa.array(df_clean[col].dropna())
+                except Exception:
+                    df_clean[col] = df_clean[col].astype(str)
+        elif pd.api.types.is_integer_dtype(df_clean[col]):
+            if (df_clean[col] > 2**63 - 1).any() or (df_clean[col] < -(2**63)).any():
+                df_clean[col] = df_clean[col].astype(str)
+    return df_clean
 
 
 def safe_drop_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
@@ -262,11 +282,16 @@ col_mode, col_dedup = st.columns([2, 1])
 with col_mode:
     save_mode = st.radio(
         "💾 Save Action",
-        options=["Append to previous data", "Replace / Overwrite"],
+        options=[
+            "Append (Fast Direct-to-Disk)",
+            "Append (Full In-Memory Merge)",
+            "Replace / Overwrite",
+        ],
         index=0,
         horizontal=True,
         help=(
-            "Append: Merges new query results with previous data and deduplicates boundaries.\n"
+            "Fast Direct-to-Disk: Appends new rows directly with mode='a' and deduplicates boundary blocks. Extremely fast O(1) disk I/O, ideal for 50k+ batches.\n"
+            "Full In-Memory Merge: Reads the whole CSV into RAM, concats, dedupes globally, and rewrites the entire file.\n"
             "Replace: Completely overwrites the existing file."
         ),
     )
@@ -311,8 +336,12 @@ if target_exists and save_mode.startswith("Append") and csv_columns:
             help="ASC = Ascending (low to high, standard for block ranges); DESC = Descending.",
         )
 
-    # Sub-millisecond extraction of the last value
-    last_val = get_last_csv_row_value(target_path, order_col)
+    # Sub-millisecond cached extraction of the last value
+    last_val = get_last_csv_row_value(
+        str(target_path),
+        order_col,
+        target_path.stat().st_mtime if target_exists else 0.0,
+    )
 
     if last_val is not None:
         c_val, c_btn = st.columns([1, 2])
@@ -325,15 +354,16 @@ if target_exists and save_mode.startswith("Append") and csv_columns:
             )
 
         with c_btn:
-            advance_label = f"⚡ Advance Query to: {order_col} >= {last_val}"
+            advance_op = "<=" if order_dir == "DESC" else ">="
+            advance_label = f"⚡ Advance Query to: {order_col} {advance_op} {last_val}"
             if st.button(advance_label, use_container_width=True, type="secondary"):
                 new_sql = update_query_cursor(
-                    st.session_state["sql_query_input_v2"], order_col, last_val
+                    st.session_state["sql_query_input_v2"], order_col, last_val, order_dir
                 )
                 st.session_state["sql_query_input_v2"] = new_sql
                 st.rerun()
 
-            st.caption(f"Suggested WHERE clause: `{order_col} >= {last_val}`")
+            st.caption(f"Suggested WHERE clause: `{order_col} {advance_op} {last_val}`")
 
     st.markdown("---")
 
@@ -394,10 +424,85 @@ if st.button("🚀 Run Query & Export Data", type="primary", use_container_width
                         output_path.parent.mkdir(parents=True, exist_ok=True)
 
                         is_append = save_mode.startswith("Append") and output_path.exists()
+                        is_fast_append = "Fast" in save_mode
                         prev_row_count = 0
                         duplicates_dropped = 0
 
-                        if is_append:
+                        # Determine active sort column
+                        active_sort_col = order_col if (order_col and order_col in df.columns) else None
+                        if not active_sort_col:
+                            if "block_number" in df.columns:
+                                active_sort_col = "block_number"
+                            elif "block_timestamp" in df.columns:
+                                active_sort_col = "block_timestamp"
+
+                        if is_append and is_fast_append:
+                            # ⚡ Direct Append Mode (O(1) memory & disk I/O)
+                            session_row_key = f"row_count_{output_path.name}"
+                            if session_row_key in st.session_state:
+                                prev_row_count = st.session_state[session_row_key]
+                            else:
+                                check_col = active_sort_col if (active_sort_col and active_sort_col in csv_columns) else (csv_columns[0] if csv_columns else None)
+                                try:
+                                    if check_col:
+                                        prev_row_count = pd.read_csv(output_path, usecols=[check_col], low_memory=False).shape[0]
+                                    else:
+                                        prev_row_count = 0
+                                except Exception:
+                                    prev_row_count = 0
+                                st.session_state[session_row_key] = prev_row_count
+
+                            df_to_append = df.copy()
+                            initial_batch_len = len(df_to_append)
+
+                            if deduplicate:
+                                # 1. Deduplicate internal batch
+                                df_to_append, _ = safe_drop_duplicates(df_to_append)
+
+                                # 2. Boundary deduplication against tail of existing file
+                                if active_sort_col and active_sort_col in df_to_append.columns:
+                                    boundary_val = df_to_append[active_sort_col].min() if (order_dir == "ASC") else df_to_append[active_sort_col].max()
+                                    boundary_mask = df_to_append[active_sort_col] == boundary_val
+                                    incoming_boundary = df_to_append[boundary_mask]
+
+                                    if not incoming_boundary.empty:
+                                        cached_tail = st.session_state.get(f"tail_{output_path.name}")
+                                        if cached_tail is None or cached_tail.empty:
+                                            try:
+                                                cached_tail = pd.read_csv(output_path, low_memory=False).tail(5000)
+                                            except Exception:
+                                                cached_tail = pd.DataFrame()
+
+                                        if not cached_tail.empty and active_sort_col in cached_tail.columns:
+                                            existing_boundary = cached_tail[cached_tail[active_sort_col] == boundary_val]
+                                            if not existing_boundary.empty:
+                                                combined = pd.concat([existing_boundary, incoming_boundary], ignore_index=True)
+                                                combined_deduped = combined.drop_duplicates(keep="first")
+                                                valid_incoming_boundary = combined_deduped.iloc[len(existing_boundary):]
+                                                df_to_append = pd.concat([valid_incoming_boundary, df_to_append[~boundary_mask]], ignore_index=True)
+
+                                duplicates_dropped = initial_batch_len - len(df_to_append)
+
+                            # Sort new batch
+                            if active_sort_col and active_sort_col in df_to_append.columns:
+                                ascending_order = (order_dir == "ASC")
+                                if pd.to_numeric(df_to_append[active_sort_col], errors="coerce").notna().sum() > (len(df_to_append) * 0.9):
+                                    sort_helper = pd.to_numeric(df_to_append[active_sort_col], errors="coerce")
+                                    df_to_append = df_to_append.iloc[sort_helper.argsort(kind="mergesort")]
+                                    if not ascending_order:
+                                        df_to_append = df_to_append.iloc[::-1]
+                                else:
+                                    df_to_append = df_to_append.sort_values(by=active_sort_col, ascending=ascending_order)
+
+                            # Direct append to disk
+                            df_to_append.to_csv(output_path, mode="a", header=False, index=False)
+                            total_rows = prev_row_count + len(df_to_append)
+                            st.session_state[session_row_key] = total_rows
+                            st.session_state[f"tail_{output_path.name}"] = df_to_append.tail(1000)
+                            preview_df = df_to_append
+
+                        elif is_append and not is_fast_append:
+                            # 🔄 Full In-Memory Merge Mode
                             try:
                                 existing_df = pd.read_csv(output_path, low_memory=False)
                                 prev_row_count = len(existing_df)
@@ -405,32 +510,47 @@ if st.button("🚀 Run Query & Export Data", type="primary", use_container_width
                             except Exception as read_err:
                                 st.warning(f"Could not read existing CSV ({read_err}); starting fresh.")
                                 final_df = df
+
+                            if deduplicate:
+                                final_df, duplicates_dropped = safe_drop_duplicates(final_df)
+
+                            if active_sort_col and active_sort_col in final_df.columns:
+                                ascending_order = (order_dir == "ASC")
+                                if pd.to_numeric(final_df[active_sort_col], errors="coerce").notna().sum() > (len(final_df) * 0.9):
+                                    sort_helper = pd.to_numeric(final_df[active_sort_col], errors="coerce")
+                                    final_df = final_df.iloc[sort_helper.argsort(kind="mergesort")]
+                                    if not ascending_order:
+                                        final_df = final_df.iloc[::-1]
+                                else:
+                                    final_df = final_df.sort_values(by=active_sort_col, ascending=ascending_order)
+
+                            final_df.to_csv(output_path, index=False)
+                            total_rows = len(final_df)
+                            st.session_state[f"row_count_{output_path.name}"] = total_rows
+                            st.session_state[f"tail_{output_path.name}"] = final_df.tail(1000)
+                            preview_df = final_df
+
                         else:
-                            final_df = df
+                            # ⚠️ Replace / Overwrite Mode or First Write
+                            final_df = df.copy()
+                            if deduplicate:
+                                final_df, duplicates_dropped = safe_drop_duplicates(final_df)
 
-                        if deduplicate:
-                            final_df, duplicates_dropped = safe_drop_duplicates(final_df)
+                            if active_sort_col and active_sort_col in final_df.columns:
+                                ascending_order = (order_dir == "ASC")
+                                if pd.to_numeric(final_df[active_sort_col], errors="coerce").notna().sum() > (len(final_df) * 0.9):
+                                    sort_helper = pd.to_numeric(final_df[active_sort_col], errors="coerce")
+                                    final_df = final_df.iloc[sort_helper.argsort(kind="mergesort")]
+                                    if not ascending_order:
+                                        final_df = final_df.iloc[::-1]
+                                else:
+                                    final_df = final_df.sort_values(by=active_sort_col, ascending=ascending_order)
 
-                        # Sort by user's chosen column and direction if column exists
-                        active_sort_col = order_col if (order_col and order_col in final_df.columns) else None
-                        if not active_sort_col:
-                            if "block_number" in final_df.columns:
-                                active_sort_col = "block_number"
-                            elif "block_timestamp" in final_df.columns:
-                                active_sort_col = "block_timestamp"
-
-                        if active_sort_col:
-                            ascending_order = (order_dir == "ASC")
-                            if pd.to_numeric(final_df[active_sort_col], errors="coerce").notna().sum() > (len(final_df) * 0.9):
-                                sort_helper = pd.to_numeric(final_df[active_sort_col], errors="coerce")
-                                final_df = final_df.iloc[sort_helper.argsort(kind="mergesort")]
-                                if not ascending_order:
-                                    final_df = final_df.iloc[::-1]
-                            else:
-                                final_df = final_df.sort_values(by=active_sort_col, ascending=ascending_order)
-
-                        final_df.to_csv(output_path, index=False)
-                        total_rows = len(final_df)
+                            final_df.to_csv(output_path, index=False)
+                            total_rows = len(final_df)
+                            st.session_state[f"row_count_{output_path.name}"] = total_rows
+                            st.session_state[f"tail_{output_path.name}"] = final_df.tail(1000)
+                            preview_df = final_df
 
                         status_label = (
                             f"Appended {new_row_count:,} rows (Total: {total_rows:,}) in {elapsed:.2f}s"
@@ -464,14 +584,15 @@ if st.button("🚀 Run Query & Export Data", type="primary", use_container_width
                             m2.metric("Execution Time", f"{elapsed:.2f}s")
                             m3.metric("Cached", str(metadata.get("cached", False)))
 
-                        # Download buttons
-                        csv_data = final_df.to_csv(index=False).encode("utf-8")
+                        # Download buttons (streaming file bytes directly from disk)
                         if is_append:
                             col_dl1, col_dl2 = st.columns(2)
                             with col_dl1:
+                                with open(output_path, "rb") as f:
+                                    full_csv_bytes = f.read()
                                 st.download_button(
                                     label=f"⬇️ Download Full Dataset ({total_rows:,} rows)",
-                                    data=csv_data,
+                                    data=full_csv_bytes,
                                     file_name=file_name,
                                     mime="text/csv",
                                     use_container_width=True,
@@ -486,17 +607,20 @@ if st.button("🚀 Run Query & Export Data", type="primary", use_container_width
                                     use_container_width=True,
                                 )
                         else:
+                            with open(output_path, "rb") as f:
+                                full_csv_bytes = f.read()
                             st.download_button(
                                 label=f"⬇️ Download CSV File ({total_rows:,} rows)",
-                                data=csv_data,
+                                data=full_csv_bytes,
                                 file_name=file_name,
                                 mime="text/csv",
                                 use_container_width=True,
                             )
 
-                        # Preview Data
+                        # Preview Data (sanitized for Arrow compatibility)
                         st.subheader(f"📊 Data Preview (Top 100 of {total_rows:,} rows)")
-                        st.dataframe(final_df.head(100), use_container_width=True)
+                        display_df = sanitize_for_display(preview_df.head(100))
+                        st.dataframe(display_df, width="stretch")
 
             except Exception as e:
                 status.update(label="Error occurred", state="error")
