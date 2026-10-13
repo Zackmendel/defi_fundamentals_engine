@@ -17,3 +17,9 @@ data/
 *.duckdb
 *.duckdb.wal
 *.duckdb.tmp
+
+dbt_packages/
+dbt_internal_packages/
+logs/
+target/
+.env
