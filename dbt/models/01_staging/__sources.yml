@@ -1,23 +1,20 @@
 version: 2
 
-# Try using these source definitions instead!
+
 sources:
-  - name: ecom
-    schema: "{{ target.schema }}_raw"
-    description: E-commerce data for the Jaffle Shop
+  - name: raw
+    schema: main
+    description: Raw imported data for Uniswap in the main schema
     tables:
-      - name: raw_customers
-        description: One record per person who has purchased one or more items
-      - name: raw_orders
-        description: One record per order (consisting of one or more order items)
-        config:
-          loaded_at_field: ordered_at
-      - name: raw_items
-        description: Items included in an order
-      - name: raw_stores
-        config:
-          loaded_at_field: opened_at
-      - name: raw_products
-        description: One record per SKU for items sold in stores
-      - name: raw_supplies
-        description: One record per supply per SKU of items sold in stores
+      - name: uniswap_raw_swaps
+        description: Raw swap data from Kaggle
+      - name: raw_aave_borrows
+        description: Raw borrow transactions for AAVE V3
+        # config:
+        #   loaded_at_field: ordered_at
+      - name: raw_aave_liquidations
+        description: Raw liquidations transactions for AAVE V3
+      - name: raw_aave_repays
+        description: Raw repay transactions for AAVE V3
+      - name: raw_aave_supplies
+        description: Raw supply transactions for AAVE V3

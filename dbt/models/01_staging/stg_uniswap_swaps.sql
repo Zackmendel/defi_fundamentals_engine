@@ -1,32 +1,99 @@
-with
+SELECT
+    to_timestamp(timestamp_ms / 1000.0) AS block_timestamp,
+    block_number,
+    tx_hash,
+    pool_name,
+    pool_address,
+    base_token,
+    quote_token,
+    fee_tier,
+    side,
+    amount_base,
+    amount_quote,
+    price_quote,
+    volume_usd AS amount_usd,
+    amount0_raw,
+    amount1_raw,
+    tick,
+    pool_liquidity,
+    sender,
+    recipient 
+FROM {{ source('raw', 'uniswap_raw_swaps') }}
 
-source as (
 
-    -- {# This references seed (CSV) data - try switching to {{ source('ecom', 'raw_supplies') }} #}
-    select * from {{ ref('raw_supplies') }}
 
-),
 
-renamed as (
 
-    select
 
-        ----------  ids
-        {{ dbt_utils.generate_surrogate_key(['id', 'sku']) }} as supply_uuid,
-        id as supply_id,
-        sku as product_id,
 
-        ---------- text
-        name as supply_name,
 
-        ---------- numerics
-        {{ cents_to_dollars('cost') }} as supply_cost,
 
-        ---------- booleans
-        perishable as is_perishable_supply
 
-    from source
 
-)
 
-select * from renamed
+
+
+
+
+
+-- SELECT
+--     to_timestamp(timestamp_ms / 1000.0) AS block_timestamp,
+--     block_number,
+--     tx_hash,
+--     pool_name,
+--     pool_address,
+--     base_token,
+--     quote_token,
+--     fee_tier,
+--     side,
+--     amount_base,
+--     amount_quote,
+--     price_quote,
+--     volume_usd,
+--     amount0_raw,
+--     amount1_raw,
+--     tick,
+--     pool_liquidity,
+--     sender,
+--     recipient 
+-- FROM main.uniswap_raw_swaps
+-- LIMIT 3
+
+
+
+
+
+
+
+
+
+
+
+-- SELECT
+--     to_timestamp(timestamp_ms / 1000.0) AS block_timestamp,
+--     block_number,
+--     tx_hash,
+--     tx_index,
+--     log_index,
+--     dex,
+--     pool_name,
+--     pool_address,
+--     asset_family,
+--     base_variant,
+--     base_token,
+--     quote_token,
+--     fee_tier,
+--     side,
+--     amount_base,
+--     amount_quote,
+--     price_quote,
+--     volume_usd,
+--     amount0_raw,
+--     amount1_raw,
+--     sqrt_price_x96,
+--     tick,
+--     pool_liquidity,
+--     sender,
+--     recipient 
+-- FROM main.uniswap_raw_swaps
+-- LIMIT 3;

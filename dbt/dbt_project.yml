@@ -18,7 +18,14 @@ models:
   defi_fundamentals_engine:
     +static_analysis: strict
     # Materialize staging models as views, and marts as tables
-    staging:
+    01_staging:
       +materialized: view
-    marts:
+      +schema: staging
+    02_intermediate:
+      +materialized: view
+      +schema: intermediate
+    03_marts:
       +materialized: table
+      +schema: mart
+flags:
+  require_generic_test_arguments_property: true

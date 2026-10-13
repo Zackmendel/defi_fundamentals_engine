@@ -1,0 +1,24 @@
+{
+    "workbench.editorAssociations": {
+        "*.parquet": "duckdb.dataFileViewer",
+        "*.csv": "duckdb.dataFileViewer",
+        "*.tsv": "duckdb.dataFileViewer",
+        "*.xlsx": "duckdb.dataFileViewer"
+    },
+    "sqltools.useNodeRuntime": true,
+    "sqltools.connections": [
+        {
+            "name": "DuckDB",
+            "accessMode": "Automatic",
+            "duckdbOptions": {
+                "enable_external_access": true,
+                "autoinstall_known_extensions": true,
+                "autoload_known_extensions": true,
+                "allow_community_extensions": true
+            },
+            "previewLimit": 50,
+            "driver": "DuckDB",
+            "database": "${workspaceFolder:defi_fundamentals_engine}/dbt/defi_fundamentals.duckdb"
+        }
+    ]
+}
