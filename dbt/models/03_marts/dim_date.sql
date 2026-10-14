@@ -3,18 +3,18 @@
 ) }}
 
 WITH bounds AS (
-SELECT
-    DATE_TRUNC('day', MIN(block_timestamp)) AS min_date,
-    DATE_TRUNC('day', MAX(block_timestamp)) AS max_date
-FROM staging.stg_uniswap_swaps
+    SELECT
+        DATE_TRUNC('day', MIN(block_timestamp)) AS min_date,
+        DATE_TRUNC('day', MAX(block_timestamp)) AS max_date
+    FROM staging.stg_uniswap_swaps
 ),
 
 date_spine AS (
-SELECT
-    UNNEST(
-        GENERATE_SERIES(min_date, max_date, INTERVAL 1 HOUR)
-    ) AS date_hour
-FROM bounds
+    SELECT
+        UNNEST(
+            GENERATE_SERIES(min_date, max_date, INTERVAL 1 HOUR)
+        ) AS date_hour
+    FROM bounds
 )
 
 SELECT
@@ -30,7 +30,9 @@ SELECT
     EXTRACT(WEEK FROM date_hour) AS week_of_year,
     EXTRACT(HOUR from date_hour) AS day_hour,
     -- Flags
-    CASE WHEN EXTRACT(ISODOW FROM date_hour) IN (6, 7) THEN TRUE ELSE FALSE END AS is_weekend
+    CASE
+        WHEN EXTRACT(ISODOW FROM date_hour) IN (6, 7) THEN TRUE ELSE FALSE
+    END AS is_weekend
 
 FROM date_spine
 ORDER BY date_hour
