@@ -54,12 +54,32 @@ The **DeFi Fundamentals Engine** implements a modular, reproducible medallion ar
 ┌────────────────────────────────────────────────────────────────────────┐
 │                   4. Analytics & Consumption Layer                     │
 │                                                                        │
-│   Streamlit Web Dashboard       DuckDB SQL CLI / BI Tools (Metabase)   │
-│   - Executive Overview          - Ad-hoc Quantitative Analysis         │
-│   - Deep Dive Metrics           - Risk Management & Solvency Modeling  │
-│   - Data Quality & Lineage                                             │
-└────────────────────────────────────────────────────────────────────────┘
+│   Next.js Executive Dashboard   DuckDB SQL CLI / BI Tools (Metabase)   │
+│   - Overview (KPIs, Charts)     - Ad-hoc Quantitative Analysis         │
+│   - Metrics (Trends & Pools)    - Risk Management & Solvency Modeling  │
+│   - Methodology & Data Quality  - Streamlit Extraction GUI             │
 ```
+
+---
+
+## 🖥️ Executive Dashboard Preview
+
+The **DeFi Fundamentals Engine** features a Next.js web application built with **Next.js 16**, **React 19**, and embedded **DuckDB**, designed with **Uniswap V3 aesthetics**.
+
+### 1. Executive Overview
+> Real-time 30-day KPI cards ($7.06B Volume, $6.15M Gross Fees, $1.21M Protocol Revenue, 8.71 bps Take Rate), interactive dual-axis volume/fee SVG time-series, pool dominance share, and LP vs. protocol treasury fee economics split.
+
+![Dashboard Overview](images/01_overview.png)
+
+### 2. Deep Dive Metrics & Pool Matrix
+> Dynamic multi-metric trend exploration (Volume, Fees, Take Rate bps, Active Traders, Trade Size) and sortable/searchable 24-pool performance matrix with direct Etherscan contract links.
+
+![Dashboard Metrics](images/02_metrics.png)
+
+### 3. Methodology, Lineage & Data Quality
+> Interactive 5-tier transformation DAG (Parquet to Metrics) with live table row counts, raw schema mappings, known limitations, and 100% passing dbt validation assertions.
+
+![Dashboard Methodology](images/03_methodology.png)
 
 ---
 
@@ -72,7 +92,8 @@ The **DeFi Fundamentals Engine** implements a modular, reproducible medallion ar
 | **DuckDB** | OLAP Database | In-process columnar database capable of querying multi-gigabyte Parquet datasets. |
 | **Apache Parquet** | Storage Format | Highly compressed, snappy columnar format for raw event datasets. |
 | **dbt (`dbt-duckdb`)** | Transformations & Tests | Medallion data transformations (`staging`, `intermediate`, `marts`, `metrics`) with data tests. |
-| **Streamlit** | UI & Visualization | Interactive dashboard for operational metric monitoring and data quality reporting. |
+| **Next.js 16 + React 19** | Executive Web Dashboard | Production web analytics dashboard with server-side DuckDB connection and Uniswap V3 aesthetics. |
+| **Streamlit** | UI & Extraction | Interactive interface for CDP-indexed on-chain querying and pipeline monitoring. |
 
 ---
 
@@ -134,12 +155,34 @@ defi_fundamentals_engine/
 │           ├── daily_protocol_metrics.sql
 │           └── metrics_by_pool.sql
 │
-├── dashboard/                          # Dashboard presentation layer
-│   └── (Dashboard scripts & assets)
+├── dashboard/                          # Next.js web application
+│   ├── package.json                    # Next.js, React 19, and duckdb dependencies
+│   ├── next.config.ts                  # Server external packages configuration
+│   └── src/
+│       ├── lib/duckdb.ts               # DuckDB connection pooling & snapshot fallback
+│       ├── app/
+│       │   ├── globals.css             # Uniswap V3 aesthetic design system
+│       │   ├── layout.tsx              # Root HTML shell & metadata
+│       │   ├── page.tsx                # Master dashboard view with tab switching
+│       │   └── api/                    # Server Route Handlers querying DuckDB
+│       │       ├── overview/route.ts   # Executive KPIs ($7.06B Vol, $6.15M Fees)
+│       │       ├── daily/route.ts      # Daily time series
+│       │       ├── pools/route.ts      # 24-pool performance breakdown
+│       │       └── quality/route.ts    # Live table row counts & dbt test results
+│       └── components/                 # Tab page components
+│           ├── Header.tsx              # Navigation bar & live status badges
+│           ├── OverviewTab.tsx         # Executive KPIs & dual-axis SVG chart
+│           ├── MetricsTab.tsx          # Multi-metric trend & pool matrix
+│           └── MethodologyTab.tsx      # Lineage DAG, sources, limitations, tests
+│
+├── images/                             # Dashboard screenshots & previews
+│   ├── 01_overview.png                 # Executive Overview tab preview
+│   ├── 02_metrics.png                  # Multi-metric explorer & pool matrix preview
+│   └── 03_methodology.png              # Lineage DAG & validation audit preview
 │
 └── docs/                               # Project documentation & methodology
     ├── methodology/
-    │   └── uniswap.md                  # Comprehensive Uniswap V3 metric dictionary & specifications
+    │   └── uniswap.md                  # Comprehensive Uniswap V3 metric dictionary & dashboard guide
     └── research/
         └── protocols.md                # In-depth architectural analysis of Uniswap (v2-v4) and Aave v3
 ```
@@ -226,6 +269,29 @@ FROM metrics.daily_protocol_metrics
 ORDER BY block_date DESC
 LIMIT 10;
 ```
+
+### Step 6: Launch the Next.js Executive Dashboard
+
+Launch the Uniswap-themed Next.js analytics dashboard connected directly to the DuckDB metrics engine:
+
+```bash
+cd ../dashboard
+
+# Install dependencies (Next.js, React, duckdb)
+npm install
+
+# Run in development mode
+npm run dev
+
+# Or build and start production server
+npm run build
+npm run start
+```
+
+Navigate to `http://localhost:3000` to interact with:
+- **Overview Tab:** Executive KPI cards ($7.06B volume, $6.15M fees, $1.21M protocol revenue, $4.94M LP payouts), interactive dual-axis volume & fee chart, and pool market share.
+- **Metrics Tab:** Multi-metric toggleable trends (Volume, Fees, Take Rate bps, Active Traders, Trade Size) and searchable Uniswap V3 pool performance matrix.
+- **Methodology & Data Quality Tab:** 5 sub-tabs covering transformation DAG lineage, data source mappings, known limitations, incidents audit log, and live dbt validation results.
 
 ---
 

@@ -26,6 +26,7 @@ This engine provides a scalable, reproducible ELT data pipeline using **DuckDB**
 | **Python 3.13+ (`uv`)** | Environment & Scripting | High-performance Python execution, dependency locking (`uv`), and extraction orchestration. |
 | **DuckDB + Parquet** | Storage & Analytical Engine | Embedded vectorized OLAP database capable of zero-copy scanning and fast analytical queries over columnar Parquet files. |
 | **dbt (`dbt-duckdb`)** | Data Transformation & Testing | Four-layer modular data transformation workflow with automated testing, documentation, and lineage graphs. |
+| **Next.js 16 + React 19** | Executive Dashboard | Production web analytics dashboard with server-side DuckDB connection, Uniswap V3 design system, and responsive SVG charts. |
 | **GitHub** | Version Control & CI/CD | Source code versioning, schema evolution tracking, and collaborative workflow. |
 | **Markdown** | Documentation | Standardized technical methodology documentation and metric dictionaries. |
 | **Streamlit** | Exploratory UI & Extraction | Interactive interface for CDP-indexed on-chain querying and pipeline monitoring. |
@@ -317,9 +318,9 @@ The pipeline enforces data integrity using automated schema tests configured in 
 
 ---
 
-## 8. Dashboard Specification
+## 8. Dashboard Implementation & User Interface
 
-The DeFi Fundamentals Engine dashboard presents three dedicated navigation views:
+The **DeFi Fundamentals Engine** features a dedicated Next.js web application located in the [`dashboard/`](file:///home/zackmendel/projects/defi_fundamentals_engine/dashboard) directory. Built with **Next.js 16**, **React 19**, and native **DuckDB** bindings, the dashboard adheres to **Uniswap V3 design principles** (obsidian dark mode, `#ff007a` Uniswap pink accents, `#fc72ff` light magenta highlights, glassmorphism panels, and responsive SVG time-series charts).
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -329,21 +330,83 @@ The DeFi Fundamentals Engine dashboard presents three dedicated navigation views
 └────────────────────┴────────────────────┴──────────────────────────────┘
 ```
 
+### Server Architecture & Database Connectivity
+- **Server Runtime:** API route handlers execute on Node.js server runtimes, querying the embedded DuckDB database file directly.
+- **Connection Resilience (`dashboard/src/lib/duckdb.ts`):** 
+  - Connects using `duckdb.OPEN_READONLY` to allow concurrent zero-copy reads.
+  - Automatically detects external CLI write locks (`IO Error: Conflicting lock is held`). When detected, the engine transparently initializes a thread-safe read snapshot at `/tmp/defi_engine_active/defi_fundamentals.duckdb` using atomic file copying. Matching the database filename preserves DuckDB's catalog resolution for views compiled against `defi_fundamentals`.
+  - Maintains a persistent singleton connection handle across queries, preventing file-reopen latency and race conditions.
+- **BigInt Serialization:** Automatic numeric conversion (`sanitizeBigInts()`) prevents serialization failures when returning EVM block numbers, timestamps, and row counts over JSON.
+
+---
+
 ### Tab 1: Overview
-- **Executive KPI Cards**: Total 30-Day Volume, Cumulative Fees, Modeled Protocol Revenue, Total Unique Traders, and Total Transactions.
-- **Volume & Fee Trend**: High-resolution daily dual-axis bar/line chart displaying Trading Volume ($) alongside Gross Fees ($).
-- **Pool Dominance**: Donut/bar breakdown of trading volume distribution across major pairs (e.g., WBTC-WETH, WETH-USDC).
+The Executive Overview tab aggregates high-level protocol performance for June 2026:
+- **Executive KPI Cards:**
+  - **30-Day Trading Volume:** **$7.06 Billion** ($7,061,421,189.03 across 31 active trading days).
+  - **Gross Trading Fees:** **$6.15 Million** ($6,152,992.60 paid by traders).
+  - **Protocol Treasury Revenue:** **$1.21 Million** ($1,213,415.62 modeled treasury capture).
+  - **Liquidity Provider Fees:** **$4.94 Million** ($4,939,576.97 paid out to in-range LPs).
+  - **Overall Take Rate:** **8.71 bps** (0.0871% fee capture efficiency).
+  - **Swap Transactions:** **1,241,244** across **23,425 unique wallets**.
+- **Interactive Dual-Axis Time-Series Chart:** Visualizes daily trading volume (gradient bar/area) alongside gross trading fees (cyan overlay line), with coordinate tooltip hover inspection.
+- **Pool Dominance Breakdown:** Horizontal visual progress bars tracking top liquidity pools (e.g. `weth_usdc_uni_v3_500`, `wbtc_weth`, `usdc_usdt`) with fee tier badges and volume share percentages.
+- **Fee Economics Split:** Stacked visual representation comparing cumulative LP compensation (80.3%) against protocol treasury revenue retention (19.7%).
+
+![Dashboard Overview](../../images/01_overview.png)
+
+---
 
 ### Tab 2: Metrics
-- **Protocol Economics Deep Dive**:
-  - Daily Take Rate trend line (monitoring fee capture efficiency).
-  - Protocol Revenue vs. LP Fee distributions.
-  - Average Trade Size ($) and Volume per Trader ($).
-- **Pool Performance Matrix**: Interactive sortable table displaying daily volume, fee yield, trade counts, and active traders per pool.
-- **Token Price History**: Interactive candlestick/line chart visualizing daily OHLC, VWAP, and daily trading volume.
+The Metrics tab enables deep quantitative analysis across time and pool dimensions:
+- **Multi-Metric Time-Series Explorer:**
+  - Toggle between primary operational dimensions: **Trading Volume ($)**, **Gross Fees ($)**, **Take Rate (bps)**, **Active Traders**, and **Average Trade Size ($)**.
+  - Interactive SVG curve with filled gradient areas, coordinate points, and hover metadata cards.
+- **Pool Performance Matrix:**
+  - Searchable and sortable data table containing all 24 active Uniswap V3 liquidity pools.
+  - Columns: *Pool Name*, *Fee Tier %*, *30-Day Volume ($)*, *Gross Fees ($)*, *LP Share ($)*, *Protocol Revenue ($)*, *Effective Take Rate (bps)*, *Total Swaps*, *Active Traders*, and direct *Etherscan Contract Address* links.
+
+![Dashboard Metrics Explorer & Pool Matrix](../../images/02_metrics.png)
+
+---
 
 ### Tab 3: Methodology & Data Quality
-- **Metric Lineage**: Interactive DAG / diagram illustrating the progression from raw Parquet swap events through staging, intermediate fee logic, marts, and metric models.
-- **Data Sources & Contracts**: Metadata directory of ingested contracts, factory addresses, event signatures, and raw column mappings.
-- **Data Quality Incidents & Test Results**: Live status indicators of dbt test execution (`unique`, `not_null`, referential integrity checks) with pass/fail counts.
-- **Known Limitations**: Clear documentation of assumptions regarding protocol fee switches, token decimals, and oracle synchronizations.
+Divided into five dedicated sub-navigation sections:
+1. **Metric Lineage:**
+   - Visual interactive DAG illustrating data progression: `normalized_swaps_2026_06.parquet` $\rightarrow$ `main.uniswap_raw_swaps` (1,567,364 rows) $\rightarrow$ `01_staging` $\rightarrow$ `02_intermediate` $\rightarrow$ `03_marts` $\rightarrow$ `04_metrics`.
+   - Comprehensive metric formula definitions and business rules.
+2. **Data Sources:**
+   - Historical dataset documentation (Marvin Gonzo Uniswap V3 Ethereum Mainnet BTC/ETH swaps for June 2026).
+   - Real-time CDP API autonomous extraction engine specifications.
+   - Complete raw-to-staging schema field mapping dictionary.
+3. **Known Limitations:**
+   - Detailed rationale on protocol fee switch modeling (1/4th on $\le 500$ bps tiers vs. 1/6th on standard/volatile tiers).
+   - Discussion of the 30-day historical observation window.
+   - On-chain execution pricing vs. off-chain oracle integration roadmap.
+4. **Data-Quality Incidents:**
+   - Incident audit log tracking resolved issues (e.g., `INC-2026-001` DuckDB static analysis resolution on `dim_date`, `INC-2026-002` null fee tier fallbacks).
+5. **Validation Results:**
+   - Real-time dbt test suite assertions: 10/10 tests passing (100% pass rate) across `unique`, `not_null`, and referential integrity constraints.
+   - Live table row count audit verifying data parity across all 9 database tables.
+
+![Dashboard Methodology Lineage & Quality](../../images/03_methodology.png)
+
+---
+
+### Running the Dashboard
+
+```bash
+cd dashboard
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Or build and launch production server
+npm run build
+npm run start -- -p 3001
+```
+Open **`http://localhost:3001`** to view the live dashboard.
+
