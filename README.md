@@ -1,19 +1,19 @@
 # ⚡ DeFi Fundamentals Engine
 
-An institutional-grade ELT analytics engine and data modeling pipeline that extracts, standardizes, models, and aggregates decentralized finance (DeFi) on-chain execution logs into verified financial and operational metrics.
+A reproducible local analytics pipeline and four-layer dbt transformation architecture that models, standardizes, and aggregates on-chain DeFi execution logs into tested financial and operational metrics.
 
-Built with **Python**, **DuckDB**, **Parquet**, **dbt**, and **Streamlit**.
+Built with **Python**, **DuckDB**, **Parquet**, **dbt**, and **Next.js**.
 
 ---
 
 ## 📌 Project Overview
 
-Traditional financial markets rely on quarterly SEC filings and centralized settlement systems, whereas decentralized financial protocols emit continuous, deterministic, and immutable state transitions on-chain. Translating these raw EVM execution logs into standardized institutional metrics (trading volume, liquidity provider earnings, protocol revenue, take rates, and daily VWAPs) requires specialized data engineering:
+Traditional financial markets rely on quarterly SEC filings and centralized settlement systems, whereas decentralized financial protocols emit continuous, deterministic, and immutable state transitions on-chain. Translating these raw EVM execution logs into standardized metrics (trading volume, attributable liquidity provider fees, modeled protocol revenue, take rates, and daily VWAPs) requires specialized data engineering:
 
 - **Uniswap V3** concentrates liquidity into discrete tick intervals, executes optimistic callback swaps, and provides governance-controlled fee switches between liquidity providers (LPs) and protocol treasuries.
 - **Aave V3** operates a hub-and-spoke lending architecture with scaled balance indexes, dynamic interest utilization curves, and liquidation mechanics.
 
-The **DeFi Fundamentals Engine** implements a modular, reproducible medallion architecture on top of an embedded **DuckDB** OLAP engine, enabling high-performance zero-copy queries over columnar Parquet files with end-to-end testing and documentation via **dbt**.
+The **DeFi Fundamentals Engine** implements a reproducible medallion architecture on top of an embedded **DuckDB** OLAP engine, enabling fast analytical queries over columnar Parquet files with transaction-level lineage, automated tests, and comprehensive documentation via **dbt**.
 
 ---
 
@@ -23,11 +23,11 @@ The **DeFi Fundamentals Engine** implements a modular, reproducible medallion ar
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        1. Ingestion / Data Source                      │
 │                                                                        │
-│   Kaggle Parquet Dataset           Coinbase Developer Platform (CDP)   │
-│ (Marvin Gonzo Uniswap V3 ETH)       Autonomous Continuous Extractor    │
-│  [normalized_swaps_2026_06.parquet]    [extract/auto_extractor.py]    │
+│   Historical Mode (Primary Dataset)      Live Extraction Mode (CLI)    │
+│    June 2026 Ethereum BTC/ETH Swaps       Coinbase Developer Platform  │
+│   [normalized_swaps_2026_06.parquet]       [extract/auto_extractor.py] │
 └───────────────────────────────────┬────────────────────────────────────┘
-                                    │ SQL Ingestion
+                                    │ SQL Ingestion (read_parquet)
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
 │                       2. Embedded OLAP Storage                         │
@@ -35,7 +35,7 @@ The **DeFi Fundamentals Engine** implements a modular, reproducible medallion ar
 │                    DuckDB (defi_fundamentals.duckdb)                   │
 │                   Raw Tables: main.uniswap_raw_swaps                   │
 └───────────────────────────────────┬────────────────────────────────────┘
-                                    │ dbt Transformation Pipeline
+                                    │ Four-Layer dbt Pipeline
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
 │                      3. dbt Transformation Layers                      │
@@ -54,30 +54,30 @@ The **DeFi Fundamentals Engine** implements a modular, reproducible medallion ar
 ┌────────────────────────────────────────────────────────────────────────┐
 │                   4. Analytics & Consumption Layer                     │
 │                                                                        │
-│   Next.js Executive Dashboard   DuckDB SQL CLI / BI Tools (Metabase)   │
-│   - Overview (KPIs, Charts)     - Ad-hoc Quantitative Analysis         │
-│   - Metrics (Trends & Pools)    - Risk Management & Solvency Modeling  │
-│   - Methodology & Data Quality  - Streamlit Extraction GUI             │
+│   Next.js Analytics Dashboard   DuckDB SQL CLI / BI Tools (Metabase)   │
+│   - Overview (Historical KPIs)  - Ad-hoc Quantitative SQL Analysis     │
+│   - Metrics (Trends & Pools)    - Transaction Lineage Verification     │
+│   - Methodology & Data Quality  - Streamlit Extraction Interface       │
 ```
 
 ---
 
-## 🖥️ Executive Dashboard Preview
+## 🖥️ Analytics Dashboard Preview
 
-The **DeFi Fundamentals Engine** features a Next.js web application built with **Next.js 16**, **React 19**, and embedded **DuckDB**, designed with **Uniswap V3 aesthetics**.
+The **DeFi Fundamentals Engine** includes a Next.js web application built with **Next.js 16**, **React 19**, and embedded **DuckDB**, designed with **Uniswap V3 aesthetics**.
 
-### 1. Executive Overview
-> Real-time 30-day KPI cards ($7.06B Volume, $6.15M Gross Fees, $1.21M Protocol Revenue, 8.71 bps Take Rate), interactive dual-axis volume/fee SVG time-series, pool dominance share, and LP vs. protocol treasury fee economics split.
+### 1. Overview Tab
+> Historical 30-day KPI cards ($7.06B single-leg volume, $6.15M gross fees, $1.21M modeled protocol revenue, $4.94M accrued LP fees, 8.71 bps take rate), interactive dual-axis volume/fee SVG time-series, pool dominance breakdown, and fee economics split.
 
 ![Dashboard Overview](images/01_overview.png)
 
 ### 2. Deep Dive Metrics & Pool Matrix
-> Dynamic multi-metric trend exploration (Volume, Fees, Take Rate bps, Active Traders, Trade Size) and sortable/searchable 24-pool performance matrix with direct Etherscan contract links.
+> Multi-metric trend exploration (Volume, Fees, Take Rate bps, Active Traders, Trade Size) and sortable/searchable 24-pool performance matrix with direct Etherscan contract links.
 
 ![Dashboard Metrics](images/02_metrics.png)
 
 ### 3. Methodology, Lineage & Data Quality
-> Interactive 5-tier transformation DAG (Parquet to Metrics) with live table row counts, raw schema mappings, known limitations, and 100% passing dbt validation assertions.
+> Interactive 5-tier transformation DAG (Parquet to Metrics) with live table row counts, raw schema mappings, documented methodology assumptions, and 100% passing dbt validation assertions.
 
 ![Dashboard Methodology](images/03_methodology.png)
 
@@ -89,10 +89,10 @@ The **DeFi Fundamentals Engine** features a Next.js web application built with *
 | :--- | :--- | :--- |
 | **Python 3.13+** | Orchestration & Extraction | Environment execution, CLI batch scripts, and automated CDP JWT auth. |
 | **uv** | Package Manager | Fast, deterministic Python package resolution and lockfile management. |
-| **DuckDB** | OLAP Database | In-process columnar database capable of querying multi-gigabyte Parquet datasets. |
+| **DuckDB** | OLAP Database | In-process columnar database providing fast analytical queries over multi-gigabyte Parquet datasets. |
 | **Apache Parquet** | Storage Format | Highly compressed, snappy columnar format for raw event datasets. |
-| **dbt (`dbt-duckdb`)** | Transformations & Tests | Medallion data transformations (`staging`, `intermediate`, `marts`, `metrics`) with data tests. |
-| **Next.js 16 + React 19** | Executive Web Dashboard | Production web analytics dashboard with server-side DuckDB connection and Uniswap V3 aesthetics. |
+| **dbt (`dbt-duckdb`)** | Transformations & Tests | Four-layer data transformation workflow (`staging`, `intermediate`, `marts`, `metrics`) with automated testing. |
+| **Next.js 16 + React 19** | Web Dashboard | Local web analytics dashboard with server-side DuckDB connection and Uniswap V3 aesthetics. |
 | **Streamlit** | UI & Extraction | Interactive interface for CDP-indexed on-chain querying and pipeline monitoring. |
 
 ---
@@ -101,9 +101,11 @@ The **DeFi Fundamentals Engine** features a Next.js web application built with *
 
 | Protocol | Version | Network | Status | Focus / Key Metrics |
 | :--- | :--- | :--- | :--- | :--- |
-| **Uniswap** | **V3** | Ethereum | **Implemented** | Swaps, Notional Volume, OHLCV, VWAP, LP Fees, Protocol Revenue, Take Rate, Active Traders. |
-| **Uniswap** | **V2 / V4** | Base | Ingestion Ready | Factory pair creation, Singleton PoolManager flash accounting, dynamic hook fees. |
-| **Aave** | **V3** | Base | Ingestion Ready | Supplies, Borrows, Repayments, Liquidations, Scaled Index Debt, Reserve Factors. |
+| **Uniswap** | **V3** | Ethereum | **Implemented & Tested** | Swaps, Notional Volume, OHLCV, VWAP, Accrued LP Fees, Modeled Protocol Revenue, Take Rate, Active Traders. |
+| **Uniswap** | **V2 / V4** | Base | **Planned (Research Completed)** | Factory pair creation, Singleton PoolManager flash accounting, dynamic hook fees. |
+| **Aave** | **V3** | Base | **Planned (Research Completed)** | Supplies, Borrows, Repayments, Liquidations, Scaled Index Debt, Reserve Factors. |
+
+> **Implementation Scope Note:** Staging models, intermediate financial logic, dimensional marts, daily metrics, and automated tests are fully implemented and verified for **Uniswap V3**. Detailed smart contract architectural research, mathematical invariants, and sample extraction queries for Uniswap V2/V4 and Aave V3 are documented in [`docs/research/protocols.md`](docs/research/protocols.md); their transformation pipelines are planned on the roadmap.
 
 ---
 
@@ -238,6 +240,9 @@ uv run dbt deps
 
 # 2. Build and test all models across staging, intermediate, marts, and metrics
 uv run dbt build
+
+# 3. (Optional) Run individual test assertions
+uv run dbt test
 ```
 
 This materializes:
@@ -245,6 +250,8 @@ This materializes:
 - **`intermediate`** (`int_token_prices_daily`, `int_uniswap_fees`) as SQL views.
 - **`mart`** (`fct_uniswap_swaps`, `dim_date`, `dim_pools`, `dim_users`) as persistent tables.
 - **`metrics`** (`daily_protocol_metrics`, `metrics_by_pool`) as persistent tables.
+
+**Expected Test Results:** All 10 dbt data tests (`unique`, `not_null`) pass deterministically across models.
 
 ### Step 5: Query Analytical Outputs
 
@@ -262,15 +269,15 @@ SELECT
     tx_count,
     active_traders,
     ROUND(fees, 2) AS gross_fees_usd,
-    ROUND(lp_fees, 2) AS lp_cut_usd,
-    ROUND(protocol_revenue, 2) AS treasury_revenue_usd,
-    ROUND(take_rate * 100, 4) AS take_rate_pct
+    ROUND(lp_fees, 2) AS lp_accrued_usd,
+    ROUND(protocol_revenue, 2) AS modeled_treasury_usd,
+    ROUND(take_rate * 10000, 2) AS take_rate_bps
 FROM metrics.daily_protocol_metrics
 ORDER BY block_date DESC
 LIMIT 10;
 ```
 
-### Step 6: Launch the Next.js Executive Dashboard
+### Step 6: Launch the Next.js Analytics Dashboard
 
 Launch the Uniswap-themed Next.js analytics dashboard connected directly to the DuckDB metrics engine:
 
@@ -285,21 +292,21 @@ npm run dev
 
 # Or build and start production server
 npm run build
-npm run start
+npm run start -- -p 3001
 ```
 
-Navigate to `http://localhost:3000` to interact with:
-- **Overview Tab:** Executive KPI cards ($7.06B volume, $6.15M fees, $1.21M protocol revenue, $4.94M LP payouts), interactive dual-axis volume & fee chart, and pool market share.
+Navigate to `http://localhost:3000` (or `http://localhost:3001`) to interact with:
+- **Overview Tab:** Historical 30-day KPI cards ($7.06B single-leg volume, $6.15M gross fees, $1.21M modeled protocol revenue assuming fee switch activation, $4.94M accrued LP fees, 8.71 bps take rate), interactive dual-axis volume & fee chart, and pool market share.
 - **Metrics Tab:** Multi-metric toggleable trends (Volume, Fees, Take Rate bps, Active Traders, Trade Size) and searchable Uniswap V3 pool performance matrix.
-- **Methodology & Data Quality Tab:** 5 sub-tabs covering transformation DAG lineage, data source mappings, known limitations, incidents audit log, and live dbt validation results.
+- **Methodology & Data Quality Tab:** 5 sub-tabs covering transformation DAG lineage, data source mappings, documented assumptions, incidents audit log, and live dbt validation results.
 
 ---
 
-## 🤖 Script & Tool Reference
+## 🤖 Optional On-Chain Extraction Workflow
 
 ### Autonomous On-Chain Extractor (`extract/auto_extractor.py`)
 
-A headless extraction engine that connects to the Coinbase Developer Platform (CDP) API using signed Ed25519 JWT tokens:
+For pulling fresh event logs beyond the historical snapshot, a headless extraction engine connects to the Coinbase Developer Platform (CDP) API using signed Ed25519 JWT tokens:
 - Inspects target CSV files in `extract/data/` to determine the latest ingested `block_number` cursor.
 - Queries CDP in batches of 50,000 rows (`block_number >= <cursor>`).
 - Performs $O(1)$ boundary deduplication and appends new rows directly.
@@ -331,9 +338,9 @@ uv run streamlit run extract/app.py
 ## 📈 Metric Dictionary & Documentation
 
 For thorough, granular documentation on calculation logic, exclusions, and business definitions, consult:
-- **[Uniswap V3 Metric Dictionary & Methodology](file:///home/zackmendel/projects/defi_fundamentals_engine/docs/methodology/uniswap.md)**: Standard syntax covering Trading Volume, Active Traders, Protocol Take Rate, LP Payouts, VWAP, and Dashboard specifications.
-- **[Protocol Architecture & Research](file:///home/zackmendel/projects/defi_fundamentals_engine/docs/research/protocols.md)**: Deep comparative breakdown of Uniswap (v2, v3, v4) and Aave v3 smart contract primitives, invariant curves, and risk frameworks.
-- **[dbt Pipeline Architecture](file:///home/zackmendel/projects/defi_fundamentals_engine/dbt/README.md)**: Detailed model documentation, DAG flows, and schema tests.
+- **[Uniswap V3 Metric Dictionary & Methodology](docs/methodology/uniswap.md)**: Rigorous accounting definitions covering Trading Volume, Active Traders, Protocol Take Rate, Attributable LP Fees, Modeled Protocol Revenue, and Dashboard specifications.
+- **[Protocol Architecture & Research](docs/research/protocols.md)**: Deep comparative breakdown of Uniswap (v2, v3, v4) and Aave v3 smart contract primitives, invariant curves, and risk frameworks.
+- **[dbt Pipeline Architecture](dbt/README.md)**: Detailed model documentation, DAG flows, and schema tests.
 
 ---
 

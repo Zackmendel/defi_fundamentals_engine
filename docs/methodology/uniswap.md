@@ -1,21 +1,21 @@
 # DeFi Fundamentals Engine — Methodology & Metric Dictionary: Uniswap V3
 
 **Project Name:** DeFi Fundamentals Engine  
-**Protocol 1:** Uniswap V3 *(Implemented)*  
-**Protocol 2:** Aave V3 *(Roadmap / Ingestion Ready)*  
+**Protocol 1:** Uniswap V3 *(Implemented & Tested)*  
+**Protocol 2:** Aave V3 *(Planned / Research Completed — see [Protocol Research](../research/protocols.md))*  
 
 ---
 
 ## 1. Project Objective
 
-The **DeFi Fundamentals Engine** transforms raw, highly granular, on-chain execution logs into standardized, auditable, and institutional-grade financial and operational metrics for decentralized finance (DeFi) protocols. 
+The **DeFi Fundamentals Engine** transforms raw, highly granular, on-chain execution logs into standardized, auditable, and reproducible financial and operational metrics for decentralized finance (DeFi) protocols. 
 
 Traditional off-chain financial analytics rely on consolidated accounting statements, whereas DeFi fundamentals are continuously emitted as immutable smart contract state transitions. However, raw EVM event logs present several analytical hurdles:
 - Log indices and arbitrary uint256 fixed-point representations require precision normalization.
-- In multi-asset liquidity pools, volume and fee economics require robust dollar-denominated valuations.
-- Concentrated liquidity dynamics (virtual reserves, ticks, and fee switches) require protocol-accurate accounting to differentiate between gross trading fees, liquidity provider (LP) payouts, and protocol-level treasury revenue.
+- In multi-asset liquidity pools, volume and fee economics require robust dollar-denominated valuations without double-counting swap legs.
+- Concentrated liquidity dynamics (virtual reserves, ticks, and governance fee switches) require protocol-accurate accounting to differentiate between gross trading fees, liquidity provider (LP) accrued earnings, and protocol-level treasury revenue.
 
-This engine provides a scalable, reproducible ELT data pipeline using **DuckDB** and **dbt** to ingest, standardize, model, and aggregate Uniswap V3 trading data, delivering clean fact/dimension tables and daily operational metrics for quantitative analysts, risk engineers, and executive dashboards.
+This engine provides a reproducible ELT data pipeline using **DuckDB** and **dbt** to ingest, standardize, model, and aggregate Uniswap V3 trading data from a defined historical observation window (June 2026 BTC/ETH pairs), accompanied by protocol research on Aave V3 and an optional on-chain extraction workflow for Base and Ethereum.
 
 ---
 
@@ -23,23 +23,30 @@ This engine provides a scalable, reproducible ELT data pipeline using **DuckDB**
 
 | Technology | Layer / Role | Description |
 | :--- | :--- | :--- |
-| **Python 3.13+ (`uv`)** | Environment & Scripting | High-performance Python execution, dependency locking (`uv`), and extraction orchestration. |
-| **DuckDB + Parquet** | Storage & Analytical Engine | Embedded vectorized OLAP database capable of zero-copy scanning and fast analytical queries over columnar Parquet files. |
+| **Python 3.13+ (`uv`)** | Environment & Scripting | Python execution, dependency locking (`uv`), and extraction orchestration. |
+| **DuckDB + Parquet** | Storage & Analytical Engine | Embedded vectorized OLAP database providing fast analytical queries over columnar Parquet files. |
 | **dbt (`dbt-duckdb`)** | Data Transformation & Testing | Four-layer modular data transformation workflow with automated testing, documentation, and lineage graphs. |
-| **Next.js 16 + React 19** | Executive Dashboard | Production web analytics dashboard with server-side DuckDB connection, Uniswap V3 design system, and responsive SVG charts. |
-| **GitHub** | Version Control & CI/CD | Source code versioning, schema evolution tracking, and collaborative workflow. |
+| **Next.js 16 + React 19** | Local Web Dashboard | Interactive analytics dashboard with server-side DuckDB connection, Uniswap V3 design system, and responsive SVG charts. |
+| **GitHub** | Version Control | Source code versioning, schema evolution tracking, and collaborative workflow. |
 | **Markdown** | Documentation | Standardized technical methodology documentation and metric dictionaries. |
 | **Streamlit** | Exploratory UI & Extraction | Interactive interface for CDP-indexed on-chain querying and pipeline monitoring. |
 
 ---
 
-## 3. Data Sources & Ingestion
+## 3. Data Sources & Ingestion Modes
 
-### Primary Source: Uniswap V3 Ethereum Swaps (June 2026)
-- **Source Dataset:** Sourced from the [Marvin Gonzo Uniswap V3 BTC/ETH dataset](https://www.kaggle.com/datasets/marvingozo/ethereum-uniswap-v3-btceth-june-2026?resource=download) covering the Ethereum mainnet for June 2026.
+The repository operates in two distinct data modes:
+
+### Mode A: Historical Dataset (Primary Pipeline & Dashboard)
+- **Source Dataset:** Sourced from the [Marvin Gonzo Uniswap V3 BTC/ETH dataset](https://www.kaggle.com/datasets/marvingozo/ethereum-uniswap-v3-btceth-june-2026?resource=download) covering Ethereum mainnet for June 2026 (1,567,364 swap logs across 24 active pools).
 - **Storage Format:** Columnar Parquet (`normalized_swaps_2026_06.parquet`), located in `extract/data/`.
 - **Ingestion Strategy:** Direct DuckDB SQL ingestion via `read_parquet()` into table `uniswap_raw_swaps` within schema `main`.
-- **Price Feeds:** Historical execution prices are derived on-chain from pool execution tick and swap ratios (`price_quote`). Integration with off-chain price oracle APIs (e.g., CoinMarketCap / CoinGecko) is slated for external cross-asset benchmark verification.
+- **Price Feeds:** Historical execution prices are derived on-chain from pool execution tick and swap ratios (`price_quote`). Integration with off-chain price oracle APIs (e.g., CoinMarketCap / CoinGecko) is planned for external cross-asset benchmark verification.
+
+### Mode B: On-Chain Live Extraction (Optional CLI Tooling)
+- **Extractor Engine:** Located in `extract/auto_extractor.py`, querying Coinbase Developer Platform (CDP) indexed APIs via signed Ed25519 JWT authentication.
+- **Workflow:** Standalone batch extractor that tracks the maximum `block_number` cursor, pages in 50,000-row batches, deduplicates boundaries in $O(1)$ time, and runs to the chain tip.
+- **Scope Distinction:** Used for ad-hoc or targeted extraction; the dbt transformation pipeline and local dashboard currently consume the reproducible Mode A historical snapshot.
 
 ### Raw Data Schema (`uniswap_raw_swaps`)
 
@@ -62,7 +69,7 @@ This engine provides a scalable, reproducible ELT data pipeline using **DuckDB**
 | `amount_base` | `DOUBLE` | Decimal-adjusted quantity of base tokens transacted. |
 | `amount_quote` | `DOUBLE` | Decimal-adjusted quantity of quote tokens transacted. |
 | `price_quote` | `DOUBLE` | Unit price of base token quoted in quote token. |
-| `volume_usd` | `DOUBLE` | Estimated notional dollar value of the trade execution. |
+| `volume_usd` | `DOUBLE` | Estimated notional dollar value of the trade execution (single leg). |
 | `amount0_raw` | `VARCHAR` | Raw EVM integer delta of token0 from `Swap` event log. |
 | `amount1_raw` | `VARCHAR` | Raw EVM integer delta of token1 from `Swap` event log. |
 | `sqrt_price_x96` | `VARCHAR` | Post-swap square root price in Q64.96 fixed-point format. |
@@ -133,12 +140,12 @@ models/
 
 ## 5. Metric Dictionary
 
-The metric dictionary follows an institutional standard specifying definition, source, grain, calculation formula, and exclusions for every metric produced by the pipeline.
+The metric dictionary follows a rigorous analytical standard specifying definition, source, grain, calculation formula, and exclusions for every metric produced by the pipeline.
 
 ### Metric: Trading Volume
 
 - **Definition:**  
-  The total gross notional USD value of executed token swaps routed through Uniswap V3 pools during the measurement period.
+  The total gross notional USD value of executed token swaps routed through Uniswap V3 pools during the measurement period. Each swap represents a single trade event; the calculation evaluates the dollar value of the trade without double-counting both sides of the transaction.
 - **Source:**  
   `fct_uniswap_swaps.amount_usd` (derived from `stg_uniswap_swaps.volume_usd`).
 - **Grain:**  
@@ -183,7 +190,7 @@ The metric dictionary follows an institutional standard specifying definition, s
 ### Metric: Gross Trading Fees (`fees`)
 
 - **Definition:**  
-  The total gross dollar-denominated transaction fees charged to traders on all executed swaps, calculated according to the configured fee tier of each specific pool.
+  The total gross dollar-denominated transaction fees charged to traders on all executed swaps, calculated according to the configured fee tier of each specific pool contract (e.g. 100, 500, 3000, 10000 ppm / hundredths of a bip).
 - **Source:**  
   `fct_uniswap_swaps.total_fee_usd` (derived from `int_uniswap_fees`).
 - **Grain:**  
@@ -195,10 +202,12 @@ The metric dictionary follows an institutional standard specifying definition, s
 
 ---
 
-### Metric: Liquidity Provider Fees (`lp_fees`)
+### Metric: Fees Attributable to Liquidity Providers (`lp_fees`)
 
 - **Definition:**  
-  The portion of gross swap fees distributed pro-rata to active in-range liquidity providers who supplied capital to the respective pool.
+  The portion of gross swap fees accrued pro-rata to active in-range liquidity providers who supplied capital to the respective pool during swap execution.
+- **Accounting Note:**  
+  This metric measures **accrued fees** generated at the time of trade execution. It does *not* represent realized wallet transfers or `collect()` claim events. In Uniswap V3, fees accumulate uncollected inside the pool contract until an LP explicitly calls `collect()`.
 - **Source:**  
   `fct_uniswap_swaps.lp_fee_usd`.
 - **Grain:**  
@@ -206,14 +215,16 @@ The metric dictionary follows an institutional standard specifying definition, s
 - **Calculation:**  
   $$\text{LP Fees} = \sum \text{CASE WHEN } \text{fee\_tier} \le 500 \text{ THEN } \text{total\_fee\_usd} \times 0.75 \text{ ELSE } \text{total\_fee\_usd} \times \frac{5}{6} \text{ END}$$
 - **Exclusions:**  
-  Protocol treasury cuts diverted when protocol fee switches are engaged.
+  Modeled protocol treasury cuts diverted when protocol fee switches are engaged.
 
 ---
 
-### Metric: Protocol Revenue (`protocol_revenue`)
+### Metric: Modeled Protocol Revenue (`protocol_revenue`)
 
 - **Definition:**  
-  The modeled share of swap fees retained by the protocol treasury or governance DAO when community fee switches are active.
+  The theoretical share of swap fees retained by the protocol treasury or governance DAO under standard governance fee-switch parameters.
+- **Accounting Note:**  
+  Uniswap V3 governance has historically debated and selectively piloted the activation of the protocol fee switch, but it has not been universally activated across mainnet pools. Consequently, this metric is a **modeled / simulated allocation** rather than observed treasury cash flows or token transfers into a DAO wallet.
 - **Source:**  
   `fct_uniswap_swaps.protocol_fee_usd`.
 - **Grain:**  
@@ -221,20 +232,21 @@ The metric dictionary follows an institutional standard specifying definition, s
 - **Calculation:**  
   $$\text{Protocol Revenue} = \sum \text{CASE WHEN } \text{fee\_tier} \le 500 \text{ THEN } \text{total\_fee\_usd} \times 0.25 \text{ ELSE } \text{total\_fee\_usd} \times \frac{1}{6} \text{ END}$$
 - **Exclusions:**  
-  Direct pool distributions paid to liquidity providers.
+  Direct pool distributions retained by liquidity providers.
 
 ---
 
-### Metric: Take Rate (`take_rate`)
+### Metric: Protocol Take Rate (`take_rate`)
 
 - **Definition:**  
-  The effective percentage of trading volume captured as fees by the protocol and its liquidity providers combined, expressing protocol pricing power and fee tier distribution.
+  The effective percentage of trading volume captured as gross fees by the protocol and its liquidity providers combined, expressing protocol pricing power and fee tier distribution across pools.
 - **Source:**  
   Derived from `daily_protocol_metrics`.
 - **Grain:**  
   Protocol × Chain × Day.
 - **Calculation:**  
   $$\text{Take Rate} = \frac{\sum \text{total\_fee\_usd}}{\sum \text{amount\_usd}}$$
+  - **Expressed In:** Basis points (bps) where $1 \text{ bps} = 0.01\% = 0.0001$, as well as percentage ($0.0871\% = 8.71 \text{ bps}$).
 - **Exclusions:**  
   Zero-volume days (protected via `NULLIF(SUM(amount_usd), 0)` to prevent division-by-zero errors).
 
@@ -309,18 +321,20 @@ The pipeline enforces data integrity using automated schema tests configured in 
 
 ## 7. Known Assumptions & Limitations
 
-1. **Protocol Fee Switch Assumption**:  
-   Uniswap V3 governance has historically debated and selectively piloted the activation of the protocol fee switch (which redirects 1/4th to 1/6th of LP fees to the DAO treasury). In this engine, fee splits are modeled deterministically using the standard governance parameter formulas to represent protocol revenue potential.
-2. **Timeframe Boundaries**:  
-   The current dataset is bounded to June 2026 Ethereum swap records. Multi-month trends reflect this specific observation window.
-3. **Price Conversion Scope**:  
-   USD volumes are derived from on-chain pool execution ratios at the time of the swap. Highly exotic pairs without stable/ETH pairings require external oracle valuation (planned via CoinMarketCap API).
+1. **Modeled vs. Observed Protocol Revenue**:  
+   Uniswap V3 governance has historically retained the capability to activate a protocol fee switch (redirecting 1/4th to 1/6th of LP fees to the DAO treasury), but fee switches are not universally enabled on Ethereum mainnet. In this pipeline, protocol revenue is a **modeled / theoretical simulation** applying governance parameter formulas to demonstrate revenue potential, rather than observed deposits into a DAO treasury contract.
+2. **Accrued Fees vs. Realized Wallet Transfers**:  
+   `lp_fees` represents the fees accrued pro-rata to in-range liquidity providers during swap transactions. Uniswap V3 fees are not pushed to LP wallets automatically; they remain uncollected inside the pool contract until an LP submits a `collect()` transaction.
+3. **Timeframe Boundaries & Data Scope**:  
+   The current analytical pipeline and dashboard operate on the June 2026 Ethereum BTC/ETH swap dataset. Metrics reflect this specific 30-day observation window and should be interpreted as historical snapshot metrics rather than a live streaming feed.
+4. **Price Conversion Scope**:  
+   USD volumes are derived from on-chain pool execution ratios at the time of the swap (`price_quote`). Highly exotic pairs without stable/ETH pairings require external oracle valuation (planned via CoinMarketCap API).
 
 ---
 
 ## 8. Dashboard Implementation & User Interface
 
-The **DeFi Fundamentals Engine** features a dedicated Next.js web application located in the [`dashboard/`](file:///home/zackmendel/projects/defi_fundamentals_engine/dashboard) directory. Built with **Next.js 16**, **React 19**, and native **DuckDB** bindings, the dashboard adheres to **Uniswap V3 design principles** (obsidian dark mode, `#ff007a` Uniswap pink accents, `#fc72ff` light magenta highlights, glassmorphism panels, and responsive SVG time-series charts).
+The **DeFi Fundamentals Engine** features a dedicated Next.js web application located in the [`dashboard/`](../../dashboard) directory. Built with **Next.js 16**, **React 19**, and native **DuckDB** bindings, the dashboard adheres to **Uniswap V3 design principles** (obsidian dark mode, `#ff007a` Uniswap pink accents, `#fc72ff` light magenta highlights, glassmorphism panels, and responsive SVG time-series charts).
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -333,25 +347,25 @@ The **DeFi Fundamentals Engine** features a dedicated Next.js web application lo
 ### Server Architecture & Database Connectivity
 - **Server Runtime:** API route handlers execute on Node.js server runtimes, querying the embedded DuckDB database file directly.
 - **Connection Resilience (`dashboard/src/lib/duckdb.ts`):** 
-  - Connects using `duckdb.OPEN_READONLY` to allow concurrent zero-copy reads.
+  - Connects using `duckdb.OPEN_READONLY` to allow concurrent reads.
   - Automatically detects external CLI write locks (`IO Error: Conflicting lock is held`). When detected, the engine transparently initializes a thread-safe read snapshot at `/tmp/defi_engine_active/defi_fundamentals.duckdb` using atomic file copying. Matching the database filename preserves DuckDB's catalog resolution for views compiled against `defi_fundamentals`.
-  - Maintains a persistent singleton connection handle across queries, preventing file-reopen latency and race conditions.
+  - Maintains a persistent singleton connection handle across queries, preventing file-reopen latency.
 - **BigInt Serialization:** Automatic numeric conversion (`sanitizeBigInts()`) prevents serialization failures when returning EVM block numbers, timestamps, and row counts over JSON.
 
 ---
 
 ### Tab 1: Overview
-The Executive Overview tab aggregates high-level protocol performance for June 2026:
-- **Executive KPI Cards:**
-  - **30-Day Trading Volume:** **$7.06 Billion** ($7,061,421,189.03 across 31 active trading days).
-  - **Gross Trading Fees:** **$6.15 Million** ($6,152,992.60 paid by traders).
-  - **Protocol Treasury Revenue:** **$1.21 Million** ($1,213,415.62 modeled treasury capture).
-  - **Liquidity Provider Fees:** **$4.94 Million** ($4,939,576.97 paid out to in-range LPs).
-  - **Overall Take Rate:** **8.71 bps** (0.0871% fee capture efficiency).
+The Executive Overview tab aggregates protocol performance across the June 2026 historical dataset:
+- **Historical KPI Cards:**
+  - **30-Day Trading Volume:** **$7.06 Billion** ($7,061,421,189.03 across 31 active trading days, single-leg USD notional).
+  - **Gross Trading Fees:** **$6.15 Million** ($6,152,992.60 paid by traders across pool fee tiers).
+  - **Modeled Protocol Revenue:** **$1.21 Million** ($1,213,415.62 modeled treasury capture assuming fee switch activation).
+  - **Accrued Liquidity Provider Fees:** **$4.94 Million** ($4,939,576.97 accrued to in-range LPs).
+  - **Overall Take Rate:** **8.71 bps** (0.0871% effective fee capture: Gross Fees / Trading Volume).
   - **Swap Transactions:** **1,241,244** across **23,425 unique wallets**.
 - **Interactive Dual-Axis Time-Series Chart:** Visualizes daily trading volume (gradient bar/area) alongside gross trading fees (cyan overlay line), with coordinate tooltip hover inspection.
 - **Pool Dominance Breakdown:** Horizontal visual progress bars tracking top liquidity pools (e.g. `weth_usdc_uni_v3_500`, `wbtc_weth`, `usdc_usdt`) with fee tier badges and volume share percentages.
-- **Fee Economics Split:** Stacked visual representation comparing cumulative LP compensation (80.3%) against protocol treasury revenue retention (19.7%).
+- **Fee Economics Split:** Stacked visual representation comparing cumulative LP compensation (80.3%) against modeled protocol treasury revenue retention (19.7%).
 
 ![Dashboard Overview](../../images/01_overview.png)
 
@@ -364,7 +378,7 @@ The Metrics tab enables deep quantitative analysis across time and pool dimensio
   - Interactive SVG curve with filled gradient areas, coordinate points, and hover metadata cards.
 - **Pool Performance Matrix:**
   - Searchable and sortable data table containing all 24 active Uniswap V3 liquidity pools.
-  - Columns: *Pool Name*, *Fee Tier %*, *30-Day Volume ($)*, *Gross Fees ($)*, *LP Share ($)*, *Protocol Revenue ($)*, *Effective Take Rate (bps)*, *Total Swaps*, *Active Traders*, and direct *Etherscan Contract Address* links.
+  - Columns: *Pool Name*, *Fee Tier %*, *30-Day Volume ($)*, *Gross Fees ($)*, *LP Share ($)*, *Modeled Protocol Revenue ($)*, *Effective Take Rate (bps)*, *Total Swaps*, *Active Traders*, and direct *Etherscan Contract Address* links.
 
 ![Dashboard Metrics Explorer & Pool Matrix](../../images/02_metrics.png)
 
@@ -377,10 +391,10 @@ Divided into five dedicated sub-navigation sections:
    - Comprehensive metric formula definitions and business rules.
 2. **Data Sources:**
    - Historical dataset documentation (Marvin Gonzo Uniswap V3 Ethereum Mainnet BTC/ETH swaps for June 2026).
-   - Real-time CDP API autonomous extraction engine specifications.
+   - On-chain CDP API autonomous extraction engine specifications.
    - Complete raw-to-staging schema field mapping dictionary.
 3. **Known Limitations:**
-   - Detailed rationale on protocol fee switch modeling (1/4th on $\le 500$ bps tiers vs. 1/6th on standard/volatile tiers).
+   - Detailed rationale on modeled protocol fee switch simulation (1/4th on $\le 500$ bps tiers vs. 1/6th on standard/volatile tiers).
    - Discussion of the 30-day historical observation window.
    - On-chain execution pricing vs. off-chain oracle integration roadmap.
 4. **Data-Quality Incidents:**
@@ -409,4 +423,5 @@ npm run build
 npm run start -- -p 3001
 ```
 Open **`http://localhost:3001`** to view the live dashboard.
+
 

@@ -10,10 +10,10 @@ When the user asks to extract blockchain events, advance batches, or pull data u
 
 ### 1. Autonomous Extractor Engine
 A dedicated headless extraction engine is located at:
-[`extract/auto_extractor.py`](file:///home/zackmendel/projects/defi_fundamentals_engine/extract/auto_extractor.py)
+[`extract/auto_extractor.py`](extract/auto_extractor.py)
 
-It mirrors the exact logic of the Streamlit application ([`extract/app_v2.py`](file:///home/zackmendel/projects/defi_fundamentals_engine/extract/app_v2.py)):
-- Reads credentials from [`extract/cdp_api_key.json`](file:///home/zackmendel/projects/defi_fundamentals_engine/extract/cdp_api_key.json) and generates authenticated Ed25519 JWTs.
+It mirrors the exact logic of the Streamlit application ([`extract/app_v2.py`](extract/app_v2.py)):
+- Reads credentials from [`extract/cdp_api_key.json`](extract/cdp_api_key.json) and generates authenticated Ed25519 JWTs.
 - Auto-detects the starting cursor from the existing target file in `extract/data/` (handling multiline CSV records accurately).
 - Loops through 50,000 row batches, injecting the advancing `block_number >= <last_val>` WHERE clause.
 - Boundary-deduplicates overlapping records in $O(1)$ time.
