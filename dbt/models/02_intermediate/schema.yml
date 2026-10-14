@@ -1,0 +1,67 @@
+version: 2
+
+models:
+  - name: int_token_prices_daily
+    description: >
+      Daily aggregated OHLCV (Open, High, Low, Close, Volume) and VWAP 
+      (Volume-Weighted Average Price) price data for trading pairs derived from swap executions.
+    columns:
+      - name: price_date
+        description: "Date of the price aggregation (UTC)."
+        data_tests:
+          - not_null
+      - name: base_token
+        description: "Base asset token symbol/address."
+        data_tests:
+          - not_null
+      - name: quote_token
+        description: "Quote asset token symbol/address."
+        data_tests:
+          - not_null
+      - name: open_price
+        description: "First swap price recorded on this date."
+      - name: high_price
+        description: "Highest swap price recorded on this date."
+      - name: low_price
+        description: "Lowest swap price recorded on this date."
+      - name: close_price
+        description: "Last swap price recorded on this date."
+      - name: vwap_price
+        description: "Volume-weighted average price across all swaps on this date."
+      - name: avg_price
+        description: "Simple arithmetic mean of swap prices on this date."
+      - name: volume_usd
+        description: "Total trading volume in USD on this date."
+      - name: volume_base
+        description: "Total quantity of base tokens swapped on this date."
+      - name: total_swaps
+        description: "Total count of individual swap transactions executed on this date."
+
+  - name: int_uniswap_fees
+    description: >
+      Calculates fee breakdowns per swap transaction, including gross swap fees
+      collected from traders and splits between Liquidity Providers (LPs) and the protocol
+      treasury based on pool fee tier economics.
+    columns:
+      - name: block_timestamp
+        description: "Timestamp when the transaction occurred."
+      - name: tx_hash
+        description: "Transaction hash."
+        data_tests:
+          - not_null
+      - name: pool_address
+        description: "Contract address of the pool where the fee was generated."
+      - name: fee_tier
+        description: "Fee tier identifier (e.g. 500, 3000, 10000)."
+      - name: decimal_factor
+        description: "Fee tier expressed as a decimal multiplier (e.g. 0.003 for 3000)."
+      - name: percent_fees
+        description: "Fee tier expressed as a percentage (e.g. 0.3 for 0.3%)."
+      - name: amount_usd
+        description: "Total swap volume in USD against which fees are computed."
+      - name: total_fee_usd
+        description: "Total gross trading fee paid by the trader in USD."
+      - name: protocol_fee_usd
+        description: "Estimated portion of swap fees allocated to protocol treasury/governance."
+      - name: lp_fee_usd
+        description: "Estimated portion of swap fees allocated to pool liquidity providers."

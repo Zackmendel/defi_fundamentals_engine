@@ -1,0 +1,88 @@
+version: 2
+
+models:
+  - name: stg_uniswap_swaps
+    description: >
+      Staged Uniswap swap transaction events. Converts Unix epoch milliseconds
+      to standard timestamps and normalizes transaction, pool, pricing, volume,
+      and address attributes for downstream mart modeling.
+    columns:
+      - name: block_timestamp
+        description: "UTC timestamp corresponding to when the block was mined."
+        data_tests:
+          - not_null
+      - name: block_number
+        description: "Block number where the swap transaction was included."
+        data_tests:
+          - not_null
+      - name: tx_hash
+        description: "Unique Ethereum/EVM transaction hash."
+        data_tests:
+          - not_null
+      - name: pool_name
+        description: "Human-readable name or pair ticker representation (e.g. WETH-USDC)."
+      - name: pool_address
+        description: "Contract address of the Uniswap pool."
+        data_tests:
+          - not_null
+      - name: base_token
+        description: "Symbol or address of the base token in the trading pair."
+      - name: quote_token
+        description: "Symbol or address of the quote token in the trading pair."
+      - name: fee_tier
+        description: "Pool fee tier in hundredths of a basis point (e.g., 500 = 0.05%, 3000 = 0.3%, 10000 = 1%)."
+      - name: side
+        description: "Direction of the trade from trader perspective ('buy' or 'sell')."
+      - name: amount_base
+        description: "Net amount of base tokens swapped (human-readable decimal-adjusted)."
+      - name: amount_quote
+        description: "Net amount of quote tokens swapped (human-readable decimal-adjusted)."
+      - name: price_quote
+        description: "Execution price of base token measured in units of quote token."
+      - name: amount_usd
+        description: "Estimated USD notional trade volume."
+      - name: amount0_raw
+        description: "Raw integer token0 amount from the on-chain Swap event log."
+      - name: amount1_raw
+        description: "Raw integer token1 amount from the on-chain Swap event log."
+      - name: tick
+        description: "Uniswap v3 pool tick at the conclusion of the swap."
+      - name: pool_liquidity
+        description: "Total active virtual liquidity (L) in the pool during the swap."
+      - name: sender
+        description: "Address initiating or executing the swap transaction (EOA or router contract)."
+      - name: recipient
+        description: "Address receiving the output tokens from the swap."
+
+  - name: stg_uniswap_pools
+    description: >
+      Distinct list of Uniswap liquidity pools identified across swap logs, capturing
+      contract addresses, token pairs, and configured fee tiers.
+    columns:
+      - name: pool_address
+        description: "Contract address of the Uniswap pool."
+        data_tests:
+          - not_null
+          - unique
+      - name: pool_name
+        description: "Human-readable pool identifier (e.g., WETH-USDC)."
+      - name: base_token
+        description: "Token designated as base asset."
+      - name: quote_token
+        description: "Token designated as quote asset."
+      - name: fee_tier
+        description: "Configured fee tier in parts per million (e.g. 500, 3000, 10000)."
+
+  - name: stg_token_prices
+    description: >
+      Granular price observations derived from swap execution ratios, tracked chronologically
+      by base asset and quote price.
+    columns:
+      - name: block_timestamp
+        description: "Timestamp at which the price was recorded."
+        data_tests:
+          - not_null
+      - name: base_token
+        description: "Token for which price is observed."
+      - name: price_quote
+        description: "Execution price per unit of base token."

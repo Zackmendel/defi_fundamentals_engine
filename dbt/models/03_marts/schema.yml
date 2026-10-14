@@ -1,0 +1,121 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: >
+      Date and hourly dimension spine generated from the historical swap date boundary range.
+      Serves as the chronological backbone for time-series reporting, trend analysis, and cohort grouping.
+    columns:
+      - name: date_hour
+        description: "Hourly timestamp bucket (primary key)."
+        data_tests:
+          - not_null
+          - unique
+      - name: date_day
+        description: "Calendar date formatted as YYYY-MM-DD."
+        data_tests:
+          - not_null
+      - name: year
+        description: "Calendar year."
+      - name: quarter
+        description: "Calendar quarter (1 to 4)."
+      - name: month
+        description: "Month number of the year (1 to 12)."
+      - name: month_name
+        description: "Full month name (e.g., January, February)."
+      - name: day_of_month
+        description: "Day of the month (1 to 31)."
+      - name: day_of_week
+        description: "ISO day of the week (1 = Monday through 7 = Sunday)."
+      - name: day_name
+        description: "Full day name (e.g., Monday, Tuesday)."
+      - name: week_of_year
+        description: "ISO week number of the year."
+      - name: day_hour
+        description: "Hour of the day (0 to 23)."
+      - name: is_weekend
+        description: "Boolean flag: TRUE if Saturday or Sunday, FALSE otherwise."
+
+  - name: dim_pools
+    description: >
+      Dimension table for unique Uniswap liquidity pools, detailing token pair composition
+      and configured fee tiers.
+    columns:
+      - name: pool_address
+        description: "Smart contract address of the liquidity pool (primary key)."
+        data_tests:
+          - not_null
+          - unique
+      - name: pool_name
+        description: "Pool trading pair name (e.g. WETH-USDC)."
+      - name: base_token
+        description: "Designated base token identifier or address."
+      - name: quote_token
+        description: "Designated quote token identifier or address."
+      - name: fee_tier
+        description: "Fee tier setting (in parts per million, e.g., 500, 3000, 10000)."
+
+  - name: dim_users
+    description: >
+      Dimension table tracking all unique wallet addresses (senders and recipients) participating
+      in Uniswap activity, including lifecycle attributes such as first seen, last seen, and total interactions.
+    columns:
+      - name: wallet_address
+        description: "Hexadecimal EVM wallet or contract address (primary key)."
+        data_tests:
+          - not_null
+          - unique
+      - name: first_seen_at
+        description: "Timestamp of the user's earliest recorded interaction."
+        data_tests:
+          - not_null
+      - name: last_seen_at
+        description: "Timestamp of the user's most recent recorded interaction."
+        data_tests:
+          - not_null
+      - name: total_interactions
+        description: "Cumulative count of swap events involving this wallet address as either sender or recipient."
+
+  - name: fct_uniswap_swaps
+    description: >
+      Core fact table recording individual swap events enriched with fee economics
+      (protocol revenue, LP revenue) and pool market state (tick, liquidity).
+    columns:
+      - name: block_date
+        description: "Date when the swap occurred."
+      - name: block_number
+        description: "Block number of the swap."
+        data_tests:
+          - not_null
+      - name: tx_hash
+        description: "Transaction hash for the swap event."
+        data_tests:
+          - not_null
+      - name: pool_address
+        description: "Contract address of the Uniswap pool."
+        data_tests:
+          - not_null
+      - name: sender
+        description: "Address that initiated the swap."
+      - name: recipient
+        description: "Address that received the swapped tokens."
+      - name: side
+        description: "Trade direction ('buy' or 'sell')."
+      - name: amount_usd
+        description: "Notional trade volume converted to USD."
+      - name: amount_base
+        description: "Quantity of base token exchanged."
+      - name: amount_quote
+        description: "Quantity of quote token exchanged."
+      - name: fee_tier
+        description: "Fee tier applied to the swap."
+      - name: total_fee_usd
+        description: "Total gross trading fee collected in USD."
+      - name: protocol_fee_usd
+        description: "Fee portion allocated to protocol/governance in USD."
+      - name: lp_fee_usd
+        description: "Fee portion allocated to liquidity providers in USD."
+      - name: tick
+        description: "Tick index after the swap execution."
+      - name: pool_liquidity
+        description: "Active liquidity depth during execution."

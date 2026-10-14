@@ -27,5 +27,8 @@ models:
     03_marts:
       +materialized: table
       +schema: mart
+    04_metrics:
+      +materialized: table 
+      +schema: metrics
 flags:
   require_generic_test_arguments_property: true

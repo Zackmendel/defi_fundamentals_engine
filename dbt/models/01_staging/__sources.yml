@@ -1,20 +1,57 @@
 version: 2
 
-
 sources:
   - name: raw
     schema: main
-    description: Raw imported data for Uniswap in the main schema
+    description: >
+      Raw on-chain and off-chain data extracts ingested into the DuckDB database.
     tables:
       - name: uniswap_raw_swaps
-        description: Raw swap data from Kaggle
+        description: >
+          Raw Uniswap event records containing swap logs, transaction metadata,
+          token flow amounts, pool ticks, and liquidity levels.
+        columns:
+          - name: timestamp_ms
+            description: "Block timestamp represented in Unix epoch milliseconds."
+          - name: block_number
+            description: "EVM block number containing the transaction."
+          - name: tx_hash
+            description: "Transaction hash."
+          - name: pool_address
+            description: "Contract address of the Uniswap pool."
+          - name: pool_name
+            description: "Name / ticker of the trading pool."
+          - name: base_token
+            description: "Symbol or address of the base token."
+          - name: quote_token
+            description: "Symbol or address of the quote token."
+          - name: fee_tier
+            description: "Fee tier in parts per million."
+          - name: amount_base
+            description: "Decimal-adjusted amount of base token swapped."
+          - name: amount_quote
+            description: "Decimal-adjusted amount of quote token swapped."
+          - name: price_quote
+            description: "Unit price of base token quoted in quote token."
+          - name: volume_usd
+            description: "Estimated swap volume in USD."
+          - name: tick
+            description: "Uniswap v3 tick after the swap."
+          - name: pool_liquidity
+            description: "Virtual liquidity (L) active in the pool."
+          - name: sender
+            description: "Address calling the swap function."
+          - name: recipient
+            description: "Address receiving swapped output tokens."
+
       - name: raw_aave_borrows
-        description: Raw borrow transactions for AAVE V3
-        # config:
-        #   loaded_at_field: ordered_at
+        description: "Raw borrow transaction logs from Aave v3 lending pools."
+
       - name: raw_aave_liquidations
-        description: Raw liquidations transactions for AAVE V3
+        description: "Raw liquidation event logs from Aave v3 lending pools."
+
       - name: raw_aave_repays
-        description: Raw repay transactions for AAVE V3
+        description: "Raw loan repayment transaction logs from Aave v3 lending pools."
+
       - name: raw_aave_supplies
-        description: Raw supply transactions for AAVE V3
+        description: "Raw asset deposit/supply transaction logs from Aave v3 lending pools."
